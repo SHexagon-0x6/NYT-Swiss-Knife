@@ -26,6 +26,7 @@
       const host = el('div', { 'data-margin-inline': name });
       const root = host.attachShadow({ mode: 'open' });
       const container = el('div', { className: 'inline-root' }); root.append(container);
+      container.style.font='13px/1.4 Arial,sans-serif';
       slots.set(name, { host, root, container });
     }
     const slot = slots.get(name);
@@ -60,6 +61,12 @@
     assert(!slots.has('connections-history') && document.querySelector('[data-margin-actions]').nextElementSibling.matches('[data-margin-feedback]'), 'No history disclosure is inserted below native controls');
     assert(slots.get('connections-undo').host.parentElement===document.querySelector('[data-margin-actions]')&&slots.get('connections-undo').host.nextElementSibling.matches('[data-margin-submit]'),'Undo mark sits beside native action buttons immediately before Submit');
     assert(getComputedStyle(slots.get('connections-undo').container.querySelector('button')).borderRadius===getComputedStyle(document.querySelector('[data-test-shuffle]')).borderRadius,'Undo mark matches native action button styling');
+    const undoLayout=slots.get('connections-undo').container.querySelector('button'),nativeAction=document.querySelector('[data-test-shuffle]');
+    const labelPosition=node=>{const r=node.getBoundingClientRect(),range=document.createRange();range.selectNodeContents(node);const t=range.getBoundingClientRect();return{center:r.y+r.height/2,x:t.x+t.width/2-r.x-r.width/2,y:t.y+t.height/2-r.y-r.height/2}};
+    const ownPosition=labelPosition(undoLayout),nativePosition=labelPosition(nativeAction);
+    assert(Math.abs(ownPosition.center-nativePosition.center)<1&&Math.abs(ownPosition.x)<1&&Math.abs(ownPosition.y-nativePosition.y)<1,'Undo mark and its label are centered with the native action row');
+    const initialHeight=undoLayout.getBoundingClientRect().height;for(let i=0;i<5;i++)adapter.refresh();
+    assert(Math.abs(undoLayout.getBoundingClientRect().height-initialHeight)<1,'Repeated layout refreshes do not grow the Undo mark button');
     assert(tries().hidden && control('Previous tries'), 'A top Tries button opens history only when requested');
     assert(toolbar().querySelector('.connection-inline-difficulty').nextElementSibling === toolbar().querySelector('.connection-swatches'), 'Difficulty is directly beside the four group controls');
     assert(!toolbar().querySelector('[data-margin-settings-anchor]'), 'Category controls leave Settings to the native top toolbar');

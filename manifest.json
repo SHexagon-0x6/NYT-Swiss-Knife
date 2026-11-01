@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "NYT Swiss Knife",
-  "version": "0.7.2",
+  "version": "0.7.3",
   "description": "Independent puzzle tools: color marks, pencil shortcuts, path sketches, clue previews and Wordle checks.",
   "minimum_chrome_version": "116",
   "permissions": [

@@ -153,6 +153,7 @@
       *{box-sizing:border-box}[hidden]{display:none!important}button,input,select{font:inherit;color:inherit}button{cursor:pointer}button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid #4b83b4;outline-offset:2px}
       .connection-inline-toolbar{display:flex;align-items:center;flex-wrap:wrap;gap:12px;min-height:40px;width:100%;margin:0;color:var(--ink,#121212);font:14px/1.35 var(--tool-font,Arial,Helvetica,sans-serif)}
       .connection-inline-difficulty{font-size:12px;color:var(--muted,#666);max-width:110px;margin-right:auto}
+      .connection-undo{display:flex;align-items:center;justify-content:center;text-align:center}
       .connection-swatches{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:6px;flex:1;min-width:250px}.connection-group{display:flex;align-items:stretch;min-width:0;background:var(--group-bg);border-radius:5px;border:1px solid transparent}
       .connection-group:has(.connection-swatch[aria-pressed=true]){border-color:var(--ink,#121212)}
       .connection-swatch{display:flex;align-items:center;justify-content:center;min-width:0;min-height:38px;flex:1;padding:7px 6px;border:0;border-radius:5px;background:transparent;font:600 13px/1.3 var(--tool-font,Arial,Helvetica,sans-serif);cursor:pointer}
@@ -177,7 +178,7 @@
     panel.append(style);
     if(!integrated)panel.append(undoButton);
 
-    const inlineDifficulty = el('span', { className: 'connection-inline-difficulty' });
+    const inlineDifficulty = el('span', { className: 'connection-inline-difficulty', role: 'status', 'aria-live': 'polite' });
     const swatches = el('div', { className: 'connection-swatches', role: 'group', 'aria-label': 'Your four categories' });
     const swatchButtons = [], clearButtons = [];
     function paintGroups() {
@@ -397,7 +398,8 @@
       if(undoButton.parentNode!==undoSlot)undoSlot.replaceChildren(el('style',{textContent:css+' .connection-undo:disabled{opacity:.5;cursor:default}'}),undoButton);
       const host=undoSlot.getRootNode().host;
       host.hidden=!feature('cornerLabels');
-      Object.assign(host.style,{width:'auto',maxWidth:'none',margin:'0',display:'inline-flex',flex:'0 0 auto'});
+      Object.assign(host.style,{width:'auto',maxWidth:'none',margin:'0',display:'inline-flex',flex:'0 0 auto',alignSelf:'center',alignItems:'center'});
+      Object.assign(undoSlot.style,{display:'flex',alignItems:'center',justifyContent:'center'});
       undoButton.classList.add('connection-undo');
       const sample=nativeButtons.find(node=>/^shuffle$/i.test(clean(node.textContent)))||submit;
       const styles=getComputedStyle(sample);
@@ -559,9 +561,11 @@
       const visibleRating = rating !== null;
       if (feature('difficulty') && rating === null) { requestDifficulty(); rating = publishedRating; }
       const hasRating = rating !== null;
-      const text = hasRating ? `Difficulty ${rating}/5` : 'Difficulty unavailable';
+      const loading = !hasRating && ratingPending;
+      const text = hasRating ? `Difficulty ${rating}/5` : loading ? 'Difficulty loading…' : 'Difficulty unavailable';
       if (inlineDifficulty.textContent !== text) inlineDifficulty.textContent = text;
-      inlineDifficulty.title = hasRating ? visibleRating ? 'Rating visible on this puzzle page' : 'Published NYT difficulty rating' : 'A published difficulty rating is not available.';
+      inlineDifficulty.setAttribute('aria-busy',String(loading));
+      inlineDifficulty.title = hasRating ? visibleRating ? 'Rating visible on this puzzle page' : 'Published NYT difficulty rating' : loading ? 'Loading the published difficulty rating.' : 'A published difficulty rating is not available.';
       captureFeedback(); renderOverlay(); positionPopup();
     }
     const geometry = () => { renderOverlay(); positionPopup(); };
