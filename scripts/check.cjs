@@ -11,7 +11,7 @@ const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 const manifest = JSON.parse(read('manifest.json'));
 const pkg = JSON.parse(read('package.json'));
 const games = ['connections', 'sudoku', 'strands', 'wordle', 'crossword'];
-const runtime = ['manifest.json', 'shared.js', 'content.js', 'ui.css', 'popup.html', 'popup.css', 'popup.js',
+const runtime = ['manifest.json', 'LICENSE', 'shared.js', 'content.js', 'ui.css', 'popup.html', 'popup.css', 'popup.js',
   'icons/LICENSE-lucide.txt', 'help.html', 'help.css', 'games/connections-rating.js', ...games.map(game => `games/${game}.js`), ...['connections.svg','sudoku.svg','strands.png','wordle.png','crossword.svg'].map(name => `icons/games/${name}`), ...[16, 32, 48, 128].map(size => `icons/${size}.png`)];
 let checks = 0;
 function check(label, fn) {

@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.7.3",
   "description": "Independent tools for NYT puzzle games",
+  "license": "MIT",
   "scripts": {
     "test": "node --test tests/*.test.cjs",
     "test:browser": "python3 scripts/browser-tests.py",

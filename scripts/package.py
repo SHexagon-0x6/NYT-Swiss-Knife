@@ -10,7 +10,7 @@ import zipfile
 
 ROOT = Path(__file__).resolve().parent.parent
 FILES = [
-    "icons/LICENSE-lucide.txt", "manifest.json", "shared.js", "content.js", "ui.css", "games/connections-rating.js",
+    "LICENSE", "icons/LICENSE-lucide.txt", "manifest.json", "shared.js", "content.js", "ui.css", "games/connections-rating.js",
     "popup.html", "popup.css", "popup.js", "help.html", "help.css",
     *[f"games/{name}.js" for name in ("connections", "sudoku", "strands", "wordle", "crossword")],
     *[f"icons/games/{name}.{ext}" for name,ext in (("connections","svg"),("sudoku","svg"),("strands","png"),("wordle","png"),("crossword","svg"))],
