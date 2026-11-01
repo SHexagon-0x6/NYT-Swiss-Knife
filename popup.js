@@ -40,5 +40,5 @@
         el('label', { className: 'toggle' }, enabled, el('span', { 'aria-hidden': 'true' }))));
     }
   }
-  start().catch(() => { status.textContent = 'Could not load settings. Close and reopen NYT Swiss Knife.'; });
+  start().catch(() => { status.textContent = 'Could not load settings. Close and reopen NYT Games Swiss Knife.'; });
 })();

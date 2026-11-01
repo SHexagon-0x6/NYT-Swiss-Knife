@@ -1,8 +1,8 @@
-# NYT Swiss Knife privacy policy
+# NYT Games Swiss Knife privacy policy
 
 Updated November 1, 2026.
 
-NYT Swiss Knife is an independent browser extension for supported New York Times puzzles. It is not affiliated with or endorsed by The New York Times.
+NYT Games Swiss Knife is an independent browser extension for supported New York Times puzzles. It is not affiliated with or endorsed by The New York Times.
 
 ## What the extension uses
 

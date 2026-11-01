@@ -1,15 +1,15 @@
 {
   "manifest_version": 3,
-  "name": "NYT Swiss Knife",
-  "version": "0.7.3",
-  "description": "Independent puzzle tools: color marks, pencil shortcuts, path sketches, clue previews and Wordle checks.",
+  "name": "NYT Games Swiss Knife",
+  "version": "0.7.4",
+  "description": "Simple tools to make your NYT gameplay better",
   "minimum_chrome_version": "116",
   "permissions": [
     "storage"
   ],
   "action": {
     "default_popup": "popup.html",
-    "default_title": "NYT Swiss Knife"
+    "default_title": "NYT Games Swiss Knife"
   },
   "icons": {
     "16": "icons/16.png",

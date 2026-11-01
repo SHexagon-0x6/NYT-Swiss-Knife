@@ -8,7 +8,7 @@ const { resolve, join } = require('node:path');
 const root = resolve(__dirname, '..');
 const profile = mkdtempSync(join(tmpdir(), 'swiss-icons-'));
 const unpacked=mkdtempSync(join(tmpdir(),'swiss-upload-'));
-const archive=resolve(process.argv[2]||join(root,'publish/nyt-swiss-knife-upload.zip'));
+const archive=resolve(process.argv[2]||join(root,'publish/nyt-games-swiss-knife-upload.zip'));
 execFileSync('python3',['-c',`import json, sys, zipfile
 from pathlib import PurePosixPath
 with zipfile.ZipFile(sys.argv[1]) as z:
@@ -49,7 +49,7 @@ const deadline=setTimeout(()=>{fail(Error('Upload verification timed out'));chro
       if(result?.loaded&&result.version)break;
       await new Promise(resolve=>setTimeout(resolve,100));
     }
-    if(result?.version!==manifest.version||!result.loaded||!result.title?.includes('NYT Swiss Knife')||!result.styles||!result.images.length||!result.images.every(Boolean))throw Error(page+' or its bundled resources failed to load');
+    if(result?.version!==manifest.version||!result.loaded||!result.title?.includes('NYT Games Swiss Knife')||!result.styles||!result.images.length||!result.images.every(Boolean))throw Error(page+' or its bundled resources failed to load');
     console.log(`PASS Packaged ${page}, styles and all images load in Chrome (v${manifest.version})`);
   }
 })().catch(error=>{console.error(error.message);process.exitCode=1;}).finally(async()=>{

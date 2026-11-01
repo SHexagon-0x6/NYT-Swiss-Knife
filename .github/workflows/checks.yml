@@ -26,7 +26,7 @@ jobs:
         with:
           name: chrome-upload
           path: |
-            publish/nyt-swiss-knife-upload.zip
-            publish/nyt-swiss-knife-upload.zip.sha256
+            publish/nyt-games-swiss-knife-upload.zip
+            publish/nyt-games-swiss-knife-upload.zip.sha256
           if-no-files-found: error
           retention-days: 7

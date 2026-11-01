@@ -233,7 +233,7 @@
       embeddedSettings=true;
       if(host.parentNode!==nativePanel)nativePanel.append(host);
       settings.classList.add('native-settings');settings.open=true;settingsTrigger.hidden=true;settingsClose.hidden=true;
-      settingsTitle.textContent='NYT Swiss Knife';
+      settingsTitle.textContent='NYT Games Swiss Knife';
       Object.assign(host.style,{position:'relative',display:'block',width:'100%',height:'auto',left:'auto',top:'auto',margin:'16px 0 0',zIndex:'auto'});
       settingsContent.removeAttribute('style');theme(host,nativePanel);matchNativeStyle(host,nativeButton||nativePanel,nativePanel);return;
     }

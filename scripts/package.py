@@ -21,7 +21,7 @@ FILES = [
 def main() -> None:
     subprocess.run(["node", str(ROOT / "scripts/check.cjs")], cwd=ROOT, check=True)
     version = json.loads((ROOT / "manifest.json").read_text())["version"]
-    destination = ROOT / "publish" / "nyt-swiss-knife-upload.zip"
+    destination = ROOT / "publish" / "nyt-games-swiss-knife-upload.zip"
     destination.parent.mkdir(exist_ok=True)
     temporary = destination.with_suffix(".zip.tmp")
     with zipfile.ZipFile(temporary, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=9) as archive:

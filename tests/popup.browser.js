@@ -19,7 +19,7 @@
     frame.contentWindow.localStorage.setItem('margin-preview', JSON.stringify({ settings, 'puzzle:kept': puzzle }));
     await load();
     const doc = frame.contentDocument, win = frame.contentWindow;
-    assert(doc.querySelector('h1')?.textContent === 'NYT Swiss Knife' && doc.title === 'NYT Swiss Knife', 'Popup uses the requested NYT Swiss Knife brand');
+    assert(doc.querySelector('h1')?.textContent === 'NYT Games Swiss Knife' && doc.title === 'NYT Games Swiss Knife', 'Popup uses the requested NYT Games Swiss Knife brand');
     const rows = [...doc.querySelectorAll('#games .game')];
     assert(rows.length === 5 && rows.map(row => row.querySelector('.game-name').textContent).join(',') === 'Connections,Sudoku,Strands,Wordle,Crossword', 'Popup lists plain game names without taglines');
     assert(rows.every(row => row.querySelectorAll('img').length === 1 && row.querySelectorAll('input[type="checkbox"]').length === 1 && !row.querySelector('a,small,p')), 'Each game row contains one icon, name, and enable switch');

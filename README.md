@@ -1,6 +1,8 @@
-# NYT Swiss Knife
+# NYT Games Swiss Knife
 
-Small tools beside the original NYT game controls. Independent project; not affiliated with The New York Times.
+Simple tools to make your NYT gameplay better
+
+Independent project; not affiliated with The New York Times.
 
 | Game | Tools |
 | --- | --- |

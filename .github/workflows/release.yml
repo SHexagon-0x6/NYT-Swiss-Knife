@@ -54,13 +54,13 @@ jobs:
           fi
           if gh release view "$RELEASE_TAG" > /dev/null 2>&1; then
             gh release upload "$RELEASE_TAG" \
-              publish/nyt-swiss-knife-upload.zip \
-              publish/nyt-swiss-knife-upload.zip.sha256 --clobber
+              publish/nyt-games-swiss-knife-upload.zip \
+              publish/nyt-games-swiss-knife-upload.zip.sha256 --clobber
             gh release edit "$RELEASE_TAG" --notes-file "$RUNNER_TEMP/release-notes.md"
           else
             gh release create "$RELEASE_TAG" \
-              publish/nyt-swiss-knife-upload.zip \
-              publish/nyt-swiss-knife-upload.zip.sha256 \
-              --verify-tag --title "NYT Swiss Knife $RELEASE_TAG" \
+              publish/nyt-games-swiss-knife-upload.zip \
+              publish/nyt-games-swiss-knife-upload.zip.sha256 \
+              --verify-tag --title "NYT Games Swiss Knife $RELEASE_TAG" \
               --notes-file "$RUNNER_TEMP/release-notes.md"
           fi
