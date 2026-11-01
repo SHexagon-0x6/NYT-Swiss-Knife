@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Connections inline controls regression</title>
+  <style>
+    body{margin:28px;font:14px Arial,Helvetica,sans-serif;color:#222}main{width:620px;max-width:100%}
+    [data-margin-game]{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}
+    [data-margin-word]{height:76px;border:0;border-radius:6px;background:#efefe6;font-weight:700;color:#222}
+    [data-margin-word][aria-pressed=true]{background:#5a594e;color:white}[data-margin-actions]{display:flex;justify-content:center;gap:10px;margin:16px 0}
+    [data-margin-actions] button{border:1px solid #222;border-radius:24px;background:white;padding:11px 18px}#results{white-space:pre-wrap;font:12px/1.6 monospace}
+  </style>
+</head>
+<body>
+  <main>
+    <div data-margin-difficulty>Difficulty: 3.2 / 5</div>
+    <p data-margin-instruction>Create four groups of four!</p>
+    <div data-margin-game="connections" data-testid="connections-board"></div>
+    <div data-margin-mistakes aria-label="Mistakes remaining"><span data-margin-mistake>●</span><span data-margin-mistake>●</span><span data-margin-mistake>●</span><span data-margin-mistake>●</span></div>
+    <div data-margin-actions><button type="button" data-test-shuffle>Shuffle</button><button type="button" data-margin-submit>Submit</button></div>
+    <div data-margin-feedback role="status"></div>
+    <details><summary>Settings</summary><div id="margin-host"></div></details>
+  </main>
+  <pre id="results">Running</pre>
+  <script src="../games/connections.js"></script>
+  <script src="connections-inline.browser.js"></script>
+</body>
+</html>

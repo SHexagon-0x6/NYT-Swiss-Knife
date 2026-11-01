@@ -1,0 +1,11 @@
+publish/
+node_modules/
+__pycache__/
+test-results/
+*.log
+*.zip
+*.zip.tmp
+.env
+.env.*
+.DS_Store
+store/

@@ -1,0 +1,58 @@
+{
+  "manifest_version": 3,
+  "name": "NYT Swiss Knife",
+  "version": "0.7.2",
+  "description": "Independent puzzle tools: color marks, pencil shortcuts, path sketches, clue previews and Wordle checks.",
+  "minimum_chrome_version": "116",
+  "permissions": [
+    "storage"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "NYT Swiss Knife"
+  },
+  "icons": {
+    "16": "icons/16.png",
+    "32": "icons/32.png",
+    "48": "icons/48.png",
+    "128": "icons/128.png"
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "https://www.nytimes.com/games/connections*",
+        "https://www.nytimes.com/games/wordle/*",
+        "https://www.nytimes.com/games/strands*",
+        "https://www.nytimes.com/games/sudoku*",
+        "https://www.nytimes.com/puzzles/sudoku/*",
+        "https://www.nytimes.com/games/crosswords/*",
+        "https://www.nytimes.com/crosswords/game/*",
+        "https://www.nytimes.com/games/bonus/crossword/*"
+      ],
+      "js": [
+        "shared.js",
+        "games/connections-rating.js",
+        "games/connections.js",
+        "games/sudoku.js",
+        "games/strands.js",
+        "games/wordle.js",
+        "games/crossword.js",
+        "content.js"
+      ],
+      "run_at": "document_idle"
+    }
+  ],
+  "web_accessible_resources": [
+    {
+      "resources": [
+        "ui.css"
+      ],
+      "matches": [
+        "https://www.nytimes.com/*"
+      ]
+    }
+  ],
+  "content_security_policy": {
+    "extension_pages": "script-src 'self'; object-src 'none'"
+  }
+}

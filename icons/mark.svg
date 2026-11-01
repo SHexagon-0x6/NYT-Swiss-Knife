@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 24 24">
+  <!-- Adapted from Lucide pocket-knife. ISC license: LICENSE-lucide.txt. -->
+  <rect x=".5" y=".5" width="23" height="23" rx="5" fill="#d92d3f"/>
+  <path d="M20.12 8.12a3.5 3.5 0 0 0-4.95-4.95l-12 12a3.5 3.5 0 0 0 4.95 4.95Z" fill="#fff" stroke="#d92d3f" stroke-width="1.5"/>
+  <circle cx="17.65" cy="5.65" r="1.05" fill="#d92d3f"/>
+  <circle cx="5.65" cy="17.65" r="1.05" fill="#d92d3f"/>
+</svg>

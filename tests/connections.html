@@ -1,0 +1,27 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Connections browser regression</title>
+  <style>
+    body { font: 16px system-ui; margin: 30px; }
+    [data-margin-game] { display:grid; grid-template-columns:repeat(4,100px); gap:8px; }
+    [data-margin-word] { height:60px; }
+    [data-margin-word][aria-pressed=true] { background:#f2db86; }
+    [data-margin-feedback] { min-height:24px; }
+  </style>
+</head>
+<body>
+  <div data-margin-difficulty>Today’s difficulty: 3.2 / 5</div>
+  <div data-margin-game="connections"></div>
+  <button type="button" data-margin-submit>Submit</button>
+  <button type="button" data-test-shuffle>Shuffle</button>
+  <div data-margin-feedback role="status"></div>
+  <div data-margin-mistakes aria-label="Mistakes remaining">
+    <span data-margin-mistake>●</span><span data-margin-mistake>●</span><span data-margin-mistake>●</span><span data-margin-mistake>●</span>
+  </div>
+  <pre id="test-results">Running</pre>
+  <script src="../games/connections.js"></script>
+  <script src="connections.browser.js"></script>
+</body>
+</html>
