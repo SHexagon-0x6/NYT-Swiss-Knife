@@ -34,10 +34,10 @@ test('monthly Bonus Crossword URLs already receive the crossword adapter', () =>
 test('verified new Bonus crossword routes select only the crossword adapter', () => {
   for (const pathname of ['/games/bonus/crossword/mini/2026-08-25', '/games/bonus/crossword/easy-mode/easy-mode-165']) connected(pathname, 'crossword');
 });
-test('the four other supported games retain their content-script routes', () => {
+test('the three other supported games retain their content-script routes', () => {
   for (const [pathname, game] of [
     ['/games/connections', 'connections'], ['/games/wordle/index.html', 'wordle'],
-    ['/games/strands', 'strands'], ['/puzzles/sudoku/easy', 'sudoku'],
+    ['/puzzles/sudoku/easy', 'sudoku'],
     ['/puzzles/sudoku/medium', 'sudoku'], ['/puzzles/sudoku/hard', 'sudoku']
   ]) connected(pathname, game);
 });

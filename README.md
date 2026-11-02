@@ -7,7 +7,6 @@ Simple tools to make your NYT gameplay better
 | Connections | Colored corner marks, category names, undo/clear marks, daily difficulty, and submitted tries. |
 | Sudoku | Snyder and Center marks, erase, undo and configurable mode keys. |
 | Crossword | Fast A–Z trials, Notes for candidate letters with erase/undo/clear, and configurable shortcuts. |
-| Strands | Draw paths, erase by click or drag, undo, clear and show/hide sketches. |
 | Wordle | Warn about conflicting letters and edit any active tile. |
 | Stats & calendar | Hard Sudoku and Daily Crossword times, speed colors, overall averages, daily edits, Chrome sync and JSON export. |
 

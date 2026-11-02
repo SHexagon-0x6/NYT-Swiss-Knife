@@ -14,7 +14,7 @@
     const find = selector => roots().map(root => root.querySelector(selector)).find(Boolean);
     const button = name => roots().flatMap(root => [...root.querySelectorAll('button')]).find(node => node.textContent === name || node.getAttribute('aria-label') === name);
     const key = (name, target = doc) => target.dispatchEvent(new win.KeyboardEvent('keydown', { key: name, bubbles: true, cancelable: true }));
-    assert(doc.querySelectorAll('#games a').length === 6 && !!doc.querySelector('#margin-host')?.shadowRoot, `${game}: direct navigation and real adapter load offline`);
+    assert(doc.querySelectorAll('#games a').length === 5 && !!doc.querySelector('#margin-host')?.shadowRoot, `${game}: direct navigation and real adapter load offline`);
     return { win, doc, find, button, key };
   }
   try {
@@ -73,14 +73,6 @@
       nativeAuto.click();const enabled=nativeAuto.checked;nativeAuto.click();
       assert(enabled&&!nativeAuto.checked,'The original candidate control toggles normally in its new location');
 
-    }
-    {
-      const { win, doc, button } = await open('strands'); const cells = [...doc.querySelectorAll('[data-margin-letter]')];
-      cells[0].click(); cells[1].click();
-      assert(cells.filter(node => node.getAttribute('aria-pressed') === 'true').length === 2, 'Strands Play selects adjacent native letters');
-      button('Draw').click();
-      for (const [index,type] of [[6,'pointerdown'],[7,'pointermove'],[7,'pointerup']]) { const r = cells[index].getBoundingClientRect(); cells[index].dispatchEvent(new win.PointerEvent(type, { bubbles: true, cancelable: true, clientX: r.x+r.width/2, clientY: r.y+r.height/2, pointerId: 1, buttons: type === 'pointerup' ? 0 : 1, button: 0 })); }
-      assert(!!doc.querySelector('[data-margin-overlay="strands"] polyline') && cells.filter(node => node.getAttribute('aria-pressed') === 'true').length === 2, 'Strands drawing saves a path without changing native selection');
     }
     {
       const { doc, button, key, find } = await open('wordle');

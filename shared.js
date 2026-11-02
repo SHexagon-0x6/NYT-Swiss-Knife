@@ -3,7 +3,6 @@
   const GAMES = {
     connections: {name: 'Connections', icon: 'icons/games/connections.svg', url: 'https://www.nytimes.com/games/connections'},
     sudoku: {name: 'Sudoku', icon: 'icons/games/sudoku.svg', url: 'https://www.nytimes.com/puzzles/sudoku/easy'},
-    strands: {name: 'Strands', icon: 'icons/games/strands.png', url: 'https://www.nytimes.com/games/strands'},
     wordle: {name: 'Wordle', icon: 'icons/games/wordle.png', url: 'https://www.nytimes.com/games/wordle/index.html'},
     crossword: {name: 'Crossword', icon: 'icons/games/crossword.svg', url: 'https://www.nytimes.com/crosswords/game/daily'}
   };
@@ -65,7 +64,6 @@
     if (/^\/games\/bonus\/crossword\//.test(path)) return 'crossword';
     if (/connections(?:\/|$)/.test(path)) return 'connections';
     if (/wordle(?:\/|$)/.test(path)) return 'wordle';
-    if (/strands(?:\/|$)/.test(path)) return 'strands';
     if (/sudoku(?:\/|$)/.test(path)) return 'sudoku';
     if (/crosswords\/(?:game|daily|mini)/.test(path)) return 'crossword';
     return null;

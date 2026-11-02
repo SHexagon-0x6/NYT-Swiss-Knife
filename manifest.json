@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "NYT Games Swiss Knife",
-  "version": "0.7.5",
+  "version": "0.7.6",
   "description": "Simple tools to make your NYT gameplay better",
   "minimum_chrome_version": "116",
   "permissions": [
@@ -22,7 +22,6 @@
       "matches": [
         "https://www.nytimes.com/games/connections*",
         "https://www.nytimes.com/games/wordle/*",
-        "https://www.nytimes.com/games/strands*",
         "https://www.nytimes.com/games/sudoku*",
         "https://www.nytimes.com/puzzles/sudoku/*",
         "https://www.nytimes.com/games/crosswords/*",
@@ -38,7 +37,6 @@
         "games/connections-rating.js",
         "games/connections.js",
         "games/sudoku.js",
-        "games/strands.js",
         "games/wordle.js",
         "games/crossword.js",
         "content.js"

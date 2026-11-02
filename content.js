@@ -12,7 +12,6 @@
   const FEATURES = {
     connections:[['cornerLabels','Color corner marks'],['attemptHistory','Previous tries'],['difficulty','Daily difficulty']],
     sudoku:[['cornerNotes','Snyder'],['centerNotes','Center']],
-    strands:[['pathDrawing','Draw paths'],['sketchUndo','Undo sketches'],['sketchVisibility','Hide/show sketches control']],
     wordle:[['letterProtection','Warn about conflicting letters'],['clickToEdit','Click to edit letters']],
     crossword:[['letterCycle','Try letters A–Z'],['candidateNotes','Notes']]
   };
@@ -186,10 +185,6 @@
   }
   function clearSlots() {slotGeometry.disconnect();for (const slot of slots.values()) slot.node.remove(); slots.clear();}
   function visible(node) {return node?.getClientRects().length && getComputedStyle(node).visibility!=='hidden';}
-  function strandsHint() {
-    return [...document.querySelectorAll('[data-margin-strands-hint],button,[role="button"]')].find(node=>visible(node)&&!node.closest(owned)&&
-      (node.hasAttribute('data-margin-strands-hint')||/\bhints?\b/i.test([node.getAttribute('aria-label'),node.getAttribute('title'),node.getAttribute('data-testid'),node.textContent].filter(Boolean).join(' '))));
-  }
   function findAnchor(game) {
     const preview=document.querySelector(`[data-margin-game="${game}"]`);
     if (visible(preview)) return preview;
@@ -198,10 +193,6 @@
       return submit?.parentElement || document.querySelector('[data-testid="connections-board"]');
     }
     if (game==='sudoku') return document.querySelector('.su-game,.su-keyboard,.su-board');
-    if (game==='strands') {
-      const anchor=slots.get('strands-sketch')?.anchor;
-      return anchor?.isConnected ? anchor : document.querySelector('[data-testid="strands-board"]');
-    }
     if (game==='wordle') return document.querySelector('[class*="Board-module_board__"],game-app') || document.querySelector('[class*="Keyboard-module_keyboard__"],game-keyboard,[data-testid="keyboard"]');
     if (game==='crossword') return document.querySelector('.xwd__layout,[data-testid="crossword-board"]') || document.querySelector('svg [data-group="cells"]')?.closest('svg') || document.querySelector('main');
     return null;
@@ -247,7 +238,7 @@
     }
     // Games without their own settings button get one inside the native toolbar.
     const control=current.game==='crossword'?nativeControl(/^Rebus(?: |$)/i):
-      nativeControl(/^(?:How to Play|Help|Statistics|Stats|Hint)(?: |$)/i)||strandsHint();
+      nativeControl(/^(?:How to Play|Help|Statistics|Stats|Hint)(?: |$)/i);
     const anchor=control?.closest('li,[class*="Popover-module_popover__trigger"],[class*="Dropdown-module_dropdown__container"]')||control;
     if(anchor?.parentElement){
       place(host,anchor,'after');
@@ -368,10 +359,9 @@
     if (id!==initCounter||disposed) return;
     adapter?.destroy?.();clearSlots();recordingShortcut=null;current=next;panel.replaceChildren();settings.open=false;
     const wordle=next.game==='wordle';
-    const strands=next.game==='strands',connections=next.game==='connections',compact=true;
+    const connections=next.game==='connections',compact=true;
     const title=compact?`${GAMES[next.game].name} settings`:'Notes & settings';
     settings.classList.toggle('wordle-settings',wordle);
-    settings.classList.toggle('strands-settings',strands);
     settings.classList.toggle('connections-settings',connections);
     settings.classList.toggle('compact-settings',compact);
     Object.assign(host.style,{width:compact?'36px':'154px',height:compact?'36px':'30px'});

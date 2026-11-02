@@ -10,9 +10,9 @@ const root = path.resolve(__dirname, '..');
 const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 const manifest = JSON.parse(read('manifest.json'));
 const pkg = JSON.parse(read('package.json'));
-const games = ['connections', 'sudoku', 'strands', 'wordle', 'crossword'];
+const games = ['connections', 'sudoku', 'wordle', 'crossword'];
 const runtime = ['manifest.json', 'LICENSE', 'shared.js', 'content.js', 'ui.css', 'popup.html', 'popup.css', 'popup.js', 'stats.js', 'stats-calendar.js', 'stats-widget.js', 'stats-worker.js', 'stats-capture.js', 'stats.css', 'stats-panel.js',
-  'icons/LICENSE-lucide.txt', 'help.html', 'help.css', 'games/connections-rating.js', ...games.map(game => `games/${game}.js`), ...['connections.svg','sudoku.svg','strands.png','wordle.png','crossword.svg'].map(name => `icons/games/${name}`), ...[16, 32, 48, 128].map(size => `icons/${size}.png`)];
+  'icons/LICENSE-lucide.txt', 'help.html', 'help.css', 'games/connections-rating.js', ...games.map(game => `games/${game}.js`), ...['connections.svg','sudoku.svg','wordle.png','crossword.svg'].map(name => `icons/games/${name}`), ...[16, 32, 48, 128].map(size => `icons/${size}.png`)];
 let checks = 0;
 function check(label, fn) {
   try { fn(); checks++; }
@@ -37,7 +37,7 @@ check('Content scripts are restricted to supported NYT games', () => {
   const script = manifest.content_scripts[0];
   assert.deepEqual(new Set(script.matches), new Set([
     'https://www.nytimes.com/games/connections*', 'https://www.nytimes.com/games/wordle/*',
-    'https://www.nytimes.com/games/strands*', 'https://www.nytimes.com/games/sudoku*', 'https://www.nytimes.com/puzzles/sudoku/*',
+    'https://www.nytimes.com/games/sudoku*', 'https://www.nytimes.com/puzzles/sudoku/*',
     'https://www.nytimes.com/games/crosswords/*', 'https://www.nytimes.com/crosswords/game/*', 'https://www.nytimes.com/games/bonus/crossword/*'
   ]));
   assert(['document_start', 'document_idle'].includes(script.run_at));

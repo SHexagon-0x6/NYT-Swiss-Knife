@@ -47,7 +47,6 @@
   const cases = [
     { name: 'Connections', game: 'connections', flag: 'cornerLabels' },
     { name: 'Sudoku', game: 'sudoku', flag: 'centerNotes' },
-    { name: 'Strands', game: 'strands', flag: 'pathDrawing' },
     { name: 'Wordle', game: 'wordle', flag: 'letterProtection' },
     { name: 'Crossword', game: 'crossword', flag: 'candidateNotes' },
     { name: 'Bonus Crossword', game: 'bonuscrossword', flag: 'candidateNotes' }
@@ -76,10 +75,6 @@
       const undo = nativeButton('Undo', { className: 'su-keyboard__undo', 'data-testid': 'undo-mobile', disabled: true });
       const auto = el('label', { className: 'su-keyboard__auto' }, el('input', { type: 'checkbox', className: 'su-keyboard__checkbox', 'data-testid': 'sudoku-keyboard-checkbox', name: 'lightenComplete' }), 'Auto Candidate Mode');
       column.append(el('div', { className: 'su-game' }, board, el('div', { className: 'su-keyboard' }, modes, pad, el('div', { className: 'native-actions' }, undo, nativeButton('Erase', { 'data-testid': 'clear-cell' })), auto)));
-    } else if (game === 'strands') {
-      board = el('div', { className: 'strands-grid' });
-      for (let index = 0; index < 48; index++) board.append(nativeButton(String.fromCharCode(65 + index % 26)));
-      column.append(el('div', { className: 'strands-layout' }, el('aside', { className: 'strands-theme', textContent: 'A demonstration theme' }), el('div', { className: 'strands-board', 'data-testid': 'strands-board' }, board, el('div', { className: 'native-actions' }, nativeButton('Hint', { 'data-margin-strands-hint': '', 'aria-label': 'Hint' })))));
     } else if (game === 'wordle') {
       board = el('div', { className: 'wordle-board Board-module_board__layout' });
       for (let row = 0; row < 6; row++) {
@@ -141,7 +136,7 @@
     for (const key of Object.keys(before)) assert(Math.abs(before[key] - after[key]) < .6, `${label}: ${key} moved from ${before[key]} to ${after[key]}`);
   }
   async function loaded(game,previousMounts){
-    const preference=game==='wordle'?'clickToEdit':game==='strands'?'pathDrawing':game==='connections'?'cornerLabels':actualGame(game)==='crossword'?'letterCycle':'cornerNotes';
+    const preference=game==='wordle'?'clickToEdit':game==='connections'?'cornerLabels':actualGame(game)==='crossword'?'letterCycle':'cornerNotes';
     await until(()=>(mounts[actualGame(game)]||0)>previousMounts&&document.querySelector('#margin-host')?.shadowRoot?.querySelector(`[data-feature="${preference}"]`),`${game} did not mount`);
     host=document.querySelector('#margin-host');shadow=host.shadowRoot;
     await until(()=>[...document.querySelectorAll('[data-margin-inline]'),host].filter(n=>n.shadowRoot).every(node=>[...node.shadowRoot.querySelectorAll('link[rel="stylesheet"]')].every(link=>!!link.sheet)),'Stylesheets did not load');

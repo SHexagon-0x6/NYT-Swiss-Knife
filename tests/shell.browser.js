@@ -84,7 +84,7 @@
       assert(!slot('connections-history'), 'previous tries still occupies space below the board');
       assert(!shadow.querySelector('[data-feature="scratchpad"],[data-feature="wordMeanings"]') && shadow.querySelector('.notes').hidden, 'removed Connections notes or dictionary remain');
       assert(fixtures.querySelector('.fixture-words').children.length===16, 'tools changed board cells');
-      assert(Object.keys(MarginGames).length===5, 'missing adapters');
+      assert(Object.keys(MarginGames).sort().join(',')==='connections,crossword,sudoku,wordle', 'unexpected game adapters');
     });
     await run('90-day retention removes expired notes and preserves recent notes/settings', async () => {
       const data = await storage.all();
@@ -163,23 +163,6 @@
       const before = nativeKeys;
       document.body.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, cancelable: true }));
       assert(nativeKeys === before + 1, 'disabled game still intercepted');
-    });
-    await run('Strands settings stay outside the native two-column layout', async () => {
-      await storage.set('settings',{disabled:[]});route('strands');
-      const grid=el('div',{style:'display:grid;grid-template-columns:repeat(6,36px)'});
-      for(let i=0;i<48;i++)grid.append(el('button',{textContent:'A'}));
-      const board=el('div',{'data-testid':'strands-board'},grid);
-      const hint=el('button',{'data-margin-strands-hint':'','aria-label':'Hint',textContent:'Hint'});
-      const layout=el('div',{style:'display:flex;gap:20px'},el('aside',{},el('p',{textContent:'Theme'}),hint),board);
-      fixtures.replaceChildren(nativeToolbar(),layout);await wait(1750);
-      const host=document.querySelector('#margin-host');
-      assert(host?.closest('[data-native-toolbar]'),'settings are not in the native toolbar');
-      assert(getComputedStyle(host).position!=='fixed','settings float away from the native toolbar');
-      assert(settings().classList.contains('strands-settings') && settings().querySelector('summary svg'), 'Strands settings icon missing');
-      assert(!shadow.querySelector('[data-feature="scratchpad"]') && shadow.querySelector('.notes').hidden, 'Strands notes remain exposed');
-      const hintRect = fixtures.querySelector('[aria-label="Statistics"]').getBoundingClientRect(), triggerRect = settings().querySelector('summary').getBoundingClientRect();
-      assert(Math.abs(triggerRect.top + triggerRect.height / 2 - hintRect.top - hintRect.height / 2) < 3 && Math.min(Math.abs(triggerRect.left - hintRect.right), Math.abs(triggerRect.right - hintRect.left)) < 16, 'Strands gear is not next to the native hint');
-      assert(grid.children.length===48,'tools changed letter grid');
     });
     await run('Crossword settings contain letter cycling and Notes', async () => {
       await storage.set('settings', { disabled: [] });

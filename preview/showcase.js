@@ -21,12 +21,6 @@
         button('Center').click();for(const n of [2,6])document.querySelector(`[data-margin-sudoku-digit="${n}"]`).click();
         break;
       }
-      case 'strands':{
-        button('Draw').click();
-        const nodes=[...document.querySelectorAll('[data-margin-letter]')];
-        function draw(indices){indices.forEach((i,n)=>{const r=nodes[i].getBoundingClientRect();nodes[i].dispatchEvent(new PointerEvent(n?'pointermove':'pointerdown',{bubbles:true,clientX:r.x+r.width/2,clientY:r.y+r.height/2,pointerId:1,buttons:1}));});const r=nodes[indices.at(-1)].getBoundingClientRect();nodes[indices.at(-1)].dispatchEvent(new PointerEvent('pointerup',{bubbles:true,clientX:r.x+r.width/2,clientY:r.y+r.height/2,pointerId:1}));}
-        find('[aria-label="Use yellow highlights"]').click();draw([0,1,2,3,4,5]);find('[aria-label="Use blue highlights"]').click();draw([18,19,20,21,22,23]);break;
-      }
       case 'wordle':{
         for(const key of 'STARE')document.dispatchEvent(new KeyboardEvent('keydown',{key,bubbles:true}));
         document.querySelector('[data-margin-enter]').click();break;

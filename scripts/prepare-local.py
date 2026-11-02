@@ -12,8 +12,10 @@ subprocess.run(['node', str(ROOT / 'scripts/check.cjs')], cwd=ROOT, check=True)
 version = json.loads((ROOT / 'manifest.json').read_text())['version']
 destination = ROOT / 'local-build' / ('nyt-games-swiss-knife-' + version)
 destination.mkdir(parents=True, exist_ok=True)
-for obsolete in ['stats.html','stats-page.js','stats-import.html','stats-import.js','stats-import.css']:
-    (destination / obsolete).unlink(missing_ok=True)
+# Remove retired runtime files when refreshing an existing unpacked build.
+for existing in destination.rglob('*'):
+    if existing.is_file() and existing.relative_to(destination).as_posix() not in FILES:
+        existing.unlink()
 for name in FILES:
     target = destination / name
     target.parent.mkdir(parents=True, exist_ok=True)

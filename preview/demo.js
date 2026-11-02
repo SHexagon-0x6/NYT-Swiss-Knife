@@ -16,13 +16,12 @@
   document.getElementById('game-title').textContent = bonus ? 'Bonus crossword' : GAMES[game].name;
   document.getElementById('game-description').textContent = {
     connections: 'Category marks and previous tries.', sudoku: 'Snyder and Center.',
-    strands: 'Sketch a path before you commit.', wordle: 'Spot clue conflicts. Change a letter with a click.',
+    wordle: 'Spot clue conflicts. Change a letter with a click.',
     crossword: bonus ? 'An original 5 × 5 mini. No subscription needed.' : 'An original practice grid, with both clues close by.',
   }[game];
   document.getElementById('test-instructions').textContent = {
     connections: 'Click a corner to toggle its fixed color: yellow, green, blue or purple. Click a category icon to filter, its × to clear that color, or double-click to rename. Open Tries above the board for your submitted groups. Click word centers to select them; feedback is simulated.',
     sudoku: 'Click an empty cell and type 1–9 in Play to enter a number. Delete erases it. Switch to Snyder or Center and use those same keys to add independent marks. Arrow keys move through the grid in Play.',
-    strands: 'In Play, click neighboring letters to select a path. Switch to Draw and drag through letters. Use the eraser beside Clear all to remove a whole path, or drag across several paths. The gear beside Stats and Help controls the other tools.',
     wordle: 'Two example rows provide visible feedback. Type STARE to see conflicting letters turn red, then press Enter to review the warning. Click any tile in your current row to type or delete a letter. Open the game’s Settings to turn either feature on or off. New row colors are sample feedback, not an answer check.',
     crossword: 'Click a square and type. Arrow keys move; Space changes Across/Down; Backspace erases; Tab moves to the next clue. Click a clue to select its entry. Hover any white square for both existing clues. No answers or checking are included.',
   }[game];
@@ -116,27 +115,6 @@
       else if (/^Arrow/.test(event.key)) { const offsets = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -9, ArrowDown: 9 }; const next = active + offsets[event.key]; if (next >= 0 && next < 81) { event.preventDefault(); select(next, true); } }
     });
     select(active);
-  } else if (game === 'strands') {
-    const grid = el('div', { className: 'strands-board', 'data-testid': 'strands-board' });
-    const letters = 'THREADNOTESAMUSEDPENCILGARDENWONDERBREEZELITTLEPATH'.slice(0,48);
-    const selected = [], cells = [];
-    const status = el('p', { className: 'sample-note', role: 'status', textContent: 'Play: click neighboring letters to select a path.' });
-    function paint() { cells.forEach((cell, index) => cell.setAttribute('aria-pressed', String(selected.includes(index)))); status.textContent = selected.length ? `Your selection: ${selected.map(i => letters[i]).join('')} · ${selected.length} letters` : 'Play: click neighboring letters to select a path.'; }
-    [...letters].forEach((letter, index) => {
-      const cell = el('button', { type: 'button', 'data-margin-letter': String(index), 'aria-pressed': 'false', textContent: letter, 'aria-label': `Letter ${letter}, row ${Math.floor(index / 6) + 1}, column ${index % 6 + 1}`, onClick: () => {
-        const last = selected.at(-1);
-        if (last === index) selected.pop();
-        else if (!selected.includes(index) && (last === undefined || Math.abs(Math.floor(last / 6) - Math.floor(index / 6)) <= 1 && Math.abs(last % 6 - index % 6) <= 1)) selected.push(index);
-        paint();
-      } }); cells.push(cell); grid.append(cell);
-    });
-    const bulb=document.createElementNS('http://www.w3.org/2000/svg','svg');
-    for(const [name,value] of Object.entries({viewBox:'0 0 24 24',width:'20',height:'20','aria-hidden':'true'}))bulb.setAttribute(name,value);
-    const bulbPath=document.createElementNS('http://www.w3.org/2000/svg','path');
-    for(const [name,value] of Object.entries({d:'M9 18h6m-5 3h4M8 14a6 6 0 1 1 8 0c-1 1-1 2-1 4H9c0-2 0-3-1-4Z',fill:'none',stroke:'currentColor','stroke-width':'1.6','stroke-linecap':'round'}))bulbPath.setAttribute(name,value);
-    bulb.append(bulbPath);
-    const hint=el('button',{type:'button',className:'action','data-margin-strands-hint':'','aria-label':'Hint',style:{display:'inline-flex',alignItems:'center',gap:'6px',marginRight:'38px'},onClick:()=>{status.textContent='Hints are not available in this demonstration puzzle.';}},bulb,'Hint');
-    board.append(grid, status, el('div', { className: 'board-actions' }, hint, el('button', { type: 'button', className: 'action', textContent: 'Clear selection', onClick: () => { selected.length = 0; paint(); } })));
   } else if (game === 'wordle') {
     const grid = el('div', { className: 'wordle-board' });
     const previous = ['CRANE','STOUT'];

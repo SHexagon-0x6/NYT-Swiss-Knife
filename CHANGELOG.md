@@ -1,5 +1,10 @@
 # Changes
 
+## 0.7.6
+
+- Remove Strands support, including sketch tools, the popup entry, page integration and the bundled game logo.
+- Remove Strands scripts and icons
+
 ## 0.7.5
 
 - Remove Crossword clue hover previews and their Settings toggle.
@@ -21,22 +26,3 @@
 - Shorten the README and help. Use larger, left-aligned help text in a centered column, with green, yellow and red stats labels.
 - Keep Sudoku Snyder and Center marks inside the board and behind Pause, Help and Settings.
 - Update the privacy policy for completion records and Chrome sync.
-
-## 0.7.4
-
-- Rename the extension to “NYT Games Swiss Knife” across its package metadata and interface.
-- Set the package summary to “Simple tools to make your NYT gameplay better”.
-- Update the release ZIP filename to match the new package name.
-
-## 0.7.3
-
-- Center the Connections Undo mark button and its label alongside the native action buttons.
-- Show “Difficulty loading…” while fetching the Connections rating, then show the rating or its unavailable state when the request finishes.
-
-## 0.7.2
-
-- Prevent continuous page updates from delaying Connections tools at startup.
-- Keep solved-color visibility tied to the current board, including in Incognito.
-- Restore Sudoku board focus after mode changes and mark controls; keep one native selection highlight.
-- Remove the icon-credit line from the popup while retaining the bundled license.
-- Keep one privacy policy in the repository and automate tested release ZIPs.

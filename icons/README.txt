@@ -9,6 +9,5 @@ Visible credit: Pocket-knife icon adapted from Lucide.
 Game icons are unmodified files published by The New York Times, downloaded October 31, 2026 for identifying the supported games. They are not original extension artwork and their rights remain with their publisher. No license or endorsement is asserted.
 Connections: https://www.nytimes.com/games-assets/v2/assets/connections/NYT-Connections-Icon.svg
 Sudoku: https://www.nytimes.com/games-assets/v2/assets/sudoku/Sudoku.svg
-Strands: https://www.nytimes.com/games-assets/v2/assets/strands/strands_logo_192x192.png
 Wordle: https://www.nytimes.com/games-assets/v2/assets/wordle/wordle_logo_192x192.png
 Crossword: https://www.nytimes.com/games-assets/v2/assets/icons/daily.svg
