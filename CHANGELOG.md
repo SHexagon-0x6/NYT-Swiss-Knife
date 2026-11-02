@@ -1,8 +1,6 @@
 # Changes
 
-## 1.0.0
-
-Unreleased local preview, based on v0.7.4. Open for feedback before publication.
+## 0.7.5
 
 - Remove Crossword clue hover previews and their Settings toggle.
 - Speed up Crossword A–Z trials while waiting for native input and selection updates; preserve the correct letter while congratulations loads.
@@ -17,12 +15,12 @@ Unreleased local preview, based on v0.7.4. Open for feedback before publication.
 - Read Connections’ visible selection instead of stale checkbox values. Save mouse and Enter submissions immediately and update their observed feedback.
 - Anchor corner marks inside Connections tiles so they stay aligned throughout the native press animation. Remove their elements before Submit, then restore the remaining tiles’ marks after the board settles.
 - Find the matching Connections Companion rating for archived puzzles even when their footer still links to today's article.
-- Put Clear marks beside Undo mark in Connections; clearing can be undone.
+- Put Clear marks beside Undo mark in Connections; clearing can be undone. Match both buttons' inner spacing to NYT's rounded controls.
 - Capture Daily Crossword congratulations with every weekday name, including “You solved a Monday Crossword.”
 - Continue Crossword A–Z trials through NYT’s varying incorrect-result headings and “square’s amiss” message, including reused confirmation buttons; stop at congratulations.
-- Shorten the stats README and help, and explain how to reconnect a tab after an extension reload.
+- Shorten the README and help. Use larger, left-aligned help text in a centered column, with green, yellow and red stats labels.
 - Keep Sudoku Snyder and Center marks inside the board and behind Pause, Help and Settings.
-- Update the privacy policy for completion records and Chrome sync. Prepare a stable unpacked build with `npm run prepare:local`.
+- Update the privacy policy for completion records and Chrome sync.
 
 ## 0.7.4
 

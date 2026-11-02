@@ -424,8 +424,13 @@
       undoButton.classList.add('connection-undo');clearAllButton.classList.add('connection-undo');
       const sample=nativeButtons.find(node=>/^shuffle$/i.test(clean(node.textContent)))||submit;
       const styles=getComputedStyle(sample);
+      // Native pills get their text inset from min-width, not horizontal padding.
+      // Preserve that inset for our longer labels instead of copying the width alone.
+      const labelRange=document.createRange();labelRange.selectNodeContents(sample);
+      const horizontalPadding=Math.max(0,(sample.getBoundingClientRect().width-labelRange.getBoundingClientRect().width)/2-parseFloat(styles.borderLeftWidth));
       for (const button of [undoButton,clearAllButton]) {
         for(const prop of ['fontFamily','fontSize','fontWeight','lineHeight','border','borderRadius','backgroundColor','color','padding','height','minWidth','boxSizing'])button.style[prop]=styles[prop];
+        button.style.paddingLeft=button.style.paddingRight=`${horizontalPadding}px`;
         button.style.margin='0';
       }
       const row=submit.parentElement;

@@ -1,57 +1,102 @@
 <!doctype html>
 <html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>NYT Games Swiss Knife · How to use</title><link rel="stylesheet" href="help.css"></head>
-<body><main>
-<h1>How to use</h1>
-<section>
-<h2><img src="icons/48.png" alt="" width="32" height="32">Your stats &amp; calendar</h2>
-<p><strong>Open:</strong> Click the knife beside NYT Settings, or expand <strong>Calendar &amp; stats</strong> in the extension popup.</p>
-<p><strong>Record:</strong> Hard Sudoku and Daily Crossword save automatically when congratulations appears. A new completion updates that date’s time. Closing keeps it. Uncheck <strong>Record this time</strong> to keep the previous time, or leave an empty date unrecorded.</p>
-<p><strong>Edit:</strong> Click any date to add, change or delete its time using <strong>m:ss</strong> or <strong>h:mm:ss</strong>. Dates follow NYT. The dot marks the open puzzle only in its on-page calendar; the extension popup has no dot.</p>
-<p><strong>Colors:</strong> Fastest 25% green, middle 50% yellow, slowest 25% red. One result or all-equal times stay yellow (normal). The overall average is below. Manage recording and sync in <strong>Data &amp; sync</strong>.</p>
-<p><strong>Export:</strong> In <strong>Data &amp; sync</strong>, <strong>Export history</strong> downloads your saved puzzle dates and times as JSON.</p>
-<p><strong>Storage:</strong> Updates keep your times. Chrome sync uses the same extension and Chrome account on each device. Enable sync before <strong>Clear history</strong> to remove synced copies too. Clearing times keeps puzzle notes.</p>
-</section>
-<section>
-<h2><img src="icons/games/connections.svg" alt="" width="32" height="32">Connections</h2>
-<p><strong>Corner marks:</strong> Click a corner to mark it; click again to remove it. Top-left is yellow, top-right green, bottom-left blue, bottom-right purple. Corners stay aligned with their tiles while selecting. They disappear before Submit and return after the game’s result animation finishes.</p>
-<p><strong>Categories:</strong> Solved colors disappear automatically. Click a category to show only its color; click again to show all. Its × clears that color. Double-click its name to rename it.</p>
-<p><strong>Difficulty:</strong> Shows the published NYT rating above the board when available, including the matching day's rating for archived puzzles.</p>
-<p><strong>Marks:</strong> <strong>Clear marks</strong> clears all corners. <strong>Undo mark</strong> restores your last change, including a clear. Both sit beside Submit.</p>
-<p><strong>Tries:</strong> Open the history icon to see your submitted groups. “One away” appears when the game shows it.</p>
-<p><strong>Settings:</strong> Use the gear beside Stats and Help to switch tools on or off.</p>
-</section>
-<section>
-<h2><img src="icons/games/sudoku.svg" alt="" width="32" height="32">Sudoku</h2>
-<p><strong>Snyder:</strong> Put your candidate numbers in a cell’s corners.</p>
-<p><strong>Center:</strong> Put your candidate numbers in the center of a cell.</p>
-<p><strong>Input:</strong> Select an empty cell, then type 1–9 or use the number buttons. Backspace erases the active mark type.</p>
-<p><strong>Undo and erase:</strong> Use the game’s lower Undo and erase buttons in either mode. Erase all clears only the current mark type.</p>
-<p><strong>Auto candidate:</strong> Use the original toggle at the top to turn NYT’s automatic candidates on or off.</p>
-<p><strong>Mode keys:</strong> P selects Play, S selects Snyder, C selects Center. Change each key in Settings or click × to turn it off. Disabled modes ignore their keys.</p>
-</section>
-<section>
-<h2><img src="icons/games/strands.png" alt="" width="32" height="32">Strands</h2>
-<p><strong>Draw:</strong> Choose yellow or blue, then drag through neighboring letters to sketch a path.</p>
-<p><strong>Erase:</strong> Use the eraser beside Clear all. Click to remove a whole path, or drag across several paths.</p>
-<p><strong>Undo:</strong> Restores the last change, including an entire erase gesture.</p>
-<p><strong>Clear all:</strong> Removes all your sketches.</p>
-<p><strong>Show/hide:</strong> Hides your sketches without deleting them.</p>
-<p><strong>Settings:</strong> Use the gear beside Hint, Stats and Help to choose your tools. Select Play or press Escape to play normally.</p>
-</section>
-<section>
-<h2><img src="icons/games/wordle.png" alt="" width="32" height="32">Wordle</h2>
-<p><strong>Clue warnings:</strong> Marks letters red when they conflict with revealed clues. Press Enter to review the conflicts and confirm whether to submit.</p>
-<p><strong>Click to edit:</strong> Click any cell in your current guess, then type a letter. Backspace or Delete erases the selected letter. Fill all five cells before submitting.</p>
-<p><strong>Settings:</strong> Open the original Settings to turn either function on or off.</p>
-</section>
-<section>
-<h2><img src="icons/games/crossword.svg" alt="" width="32" height="32">Crossword</h2>
-<p><strong>Try letters A–Z:</strong> Select a square and start A–Z beside Rebus. It tries letters as fast as the game accepts them, closing <strong>Keep trying</strong> messages along the way. Pause, Resume or Stop anytime. It stops at congratulations, after Z, or when you edit or leave.</p>
-<p><strong>Notes:</strong> Click Notes beside A–Z or tap Ctrl. In an empty square, type possible letters; type one again to remove it. Backspace/Delete erases that square. The adjacent buttons undo, erase or clear all candidates; Ctrl/Cmd+Z also undoes. Tap Ctrl again or Escape to enter answers normally. Candidates save locally for that puzzle.</p>
-<p><strong>Pencil shortcut:</strong> Tap Shift to toggle the game’s Pencil mode. Record your own key or combination in the original Settings, or click × to disable it.</p>
-<p><strong>Settings:</strong> Turn A–Z or Notes on/off and customize the Pencil and candidate shortcuts. Assigning an already-used shortcut replaces its previous binding.</p>
-</section>
-<footer>Independent project. Not affiliated with The New York Times. <a href="https://github.com/SHexagon-0x6/NYT-Swiss-Knife/blob/main/PRIVACY.md" target="_blank" rel="noopener">Privacy policy</a>.<br><a href="https://lucide.dev/icons/pocket-knife" title="Lucide pocket-knife icon" target="_blank" rel="noopener">Pocket-knife icon adapted from Lucide</a></footer>
-</main></body>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>NYT Games Swiss Knife · How to use</title>
+  <style>
+    :root {
+      color-scheme: light;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Arial, sans-serif;
+      color: #222;
+      background: #fff;
+      font-size: 17px;
+      line-height: 1.5;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; }
+    main { width: calc(100% - 64px); max-width: 1080px; margin: 32px auto; text-align: left; }
+    header { margin-bottom: 24px; }
+    h1 { margin: 0; font-size: 32px; line-height: 1.2; letter-spacing: -0.6px; }
+    .settings-hint { margin: 6px 0 0; color: #555; font-size: 16px; }
+    section { margin: 0 0 20px; }
+    h2 { display: flex; align-items: center; gap: 9px; margin: 0 0 6px; font-size: 20px; line-height: 28px; }
+    h2 img { display: block; width: 28px; height: 28px; flex: 0 0 28px; object-fit: contain; }
+    .row { display: grid; grid-template-columns: 144px minmax(0, 1fr); gap: 16px; margin: 0; padding: 2px 0; }
+    .row > strong { font-weight: 650; }
+    .row > span { min-width: 0; overflow-wrap: break-word; }
+    strong { font-weight: 650; }
+    .color-guide { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; }
+    .color-key { display: inline-flex; align-items: center; gap: 6px; padding: 2px 8px; border-radius: 4px; font-size: 15px; font-weight: 650; line-height: 21px; white-space: nowrap; }
+    .color-dot { width: 10px; height: 10px; flex: 0 0 10px; border-radius: 50%; background: currentColor; }
+    .green { color: #21663b; background: #cde8cf; }
+    .yellow { color: #785900; background: #f8e7a7; }
+    .red { color: #9d3333; background: #f0cdcd; }
+    .color-note { font-size: 15px; color: #555; }
+    footer { margin-top: 24px; padding-top: 14px; border-top: 1px solid #e5e5e5; font-size: 14px; line-height: 1.6; color: #666; }
+    a { color: #343434; text-decoration-thickness: 1px; text-underline-offset: 2px; }
+    a:focus-visible { outline: 2px solid #2966c2; outline-offset: 3px; }
+    @media (max-width: 700px) {
+      main { width: calc(100% - 32px); margin: 20px auto; }
+      h1 { font-size: 28px; }
+      section { margin-bottom: 18px; }
+      .row { display: block; padding: 3px 0; }
+      .row > strong { margin-right: 4px; }
+      .row > .color-guide { display: flex; margin-top: 4px; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>How to use</h1>
+    <p class="settings-hint">Open Settings from the status bar icon.</p>
+  </header>
+
+  <section aria-labelledby="stats-heading">
+    <h2 id="stats-heading"><img src="icons/48.png" alt="" width="24" height="24">Your stats &amp; calendar</h2>
+    <p class="row"><strong>Open:</strong><span>Expand <strong>Calendar &amp; stats</strong> in the extension popup.</span></p>
+    <p class="row"><strong>Record:</strong><span>Hard Sudoku and Daily Crossword save automatically. Uncheck <strong>Record this time</strong> to skip.</span></p>
+    <p class="row"><strong>Colors:</strong><span class="color-guide"><span class="color-key green"><span class="color-dot" aria-hidden="true"></span>Green: fastest 25%</span><span class="color-key yellow"><span class="color-dot" aria-hidden="true"></span>Yellow: middle 50%</span><span class="color-key red"><span class="color-dot" aria-hidden="true"></span>Red: slowest 25%</span><span class="color-note">One result or identical times stay yellow.</span></span></p>
+    <p class="row"><strong>Export:</strong><span>Choose <strong>Data &amp; sync → Export history</strong> to download your dates and times as JSON.</span></p>
+    <p class="row"><strong>Storage:</strong><span>Updates preserve your times.</span></p>
+    <p class="row"><strong>Sync:</strong><span>Use the same Chrome account. Enable sync before <strong>Clear history</strong> to remove synced copies.</span></p>
+  </section>
+
+  <section aria-labelledby="connections-heading">
+    <h2 id="connections-heading"><img src="icons/games/connections.svg" alt="" width="24" height="24">Connections</h2>
+    <p class="row"><strong>Corner marks:</strong><span>Click a corner to add or remove a mark.</span></p>
+    <p class="row"><strong>Categories:</strong><span>Click to filter a color; click again to show all. × clears its marks; double-click to rename.</span></p>
+    <p class="row"><strong>Difficulty:</strong><span>Shows the published NYT rating above the board when available.</span></p>
+    <p class="row"><strong>Tries:</strong><span>Click the history icon to view your submissions.</span></p>
+  </section>
+
+  <section aria-labelledby="sudoku-heading">
+    <h2 id="sudoku-heading"><img src="icons/games/sudoku.svg" alt="" width="24" height="24">Sudoku</h2>
+    <p class="row"><strong>Snyder:</strong><span>Enter candidates in a cell’s corners.</span></p>
+    <p class="row"><strong>Center:</strong><span>Enter candidates in the center of a cell.</span></p>
+    <p class="row"><strong>Mode keys:</strong><span>Set hotkeys for Play, Snyder, and Center.</span></p>
+  </section>
+
+  <section aria-labelledby="strands-heading">
+    <h2 id="strands-heading"><img src="icons/games/strands.png" alt="" width="24" height="24">Strands</h2>
+    <p class="row"><strong>Draw:</strong><span>Choose yellow or blue, then drag through neighboring letters to sketch a path.</span></p>
+  </section>
+
+  <section aria-labelledby="wordle-heading">
+    <h2 id="wordle-heading"><img src="icons/games/wordle.png" alt="" width="24" height="24">Wordle</h2>
+    <p class="row"><strong>Clue warnings:</strong><span>Letters turn red when they conflict with revealed clues.</span></p>
+    <p class="row"><strong>Click to edit:</strong><span>Click any cell in your current guess to edit it.</span></p>
+  </section>
+
+  <section aria-labelledby="crossword-heading">
+    <h2 id="crossword-heading"><img src="icons/games/crossword.svg" alt="" width="24" height="24">Crossword</h2>
+    <p class="row"><strong>Try letters A–Z:</strong><span>Select a square, then click A–Z beside Rebus to try letters as fast as the game allows.</span></p>
+    <p class="row"><strong>Notes:</strong><span>Click Notes or press your hotkey to add candidate letters to empty squares.</span></p>
+    <p class="row"><strong>Pencil shortcut:</strong><span>Press your hotkey to toggle Pencil mode.</span></p>
+  </section>
+
+  <footer>Independent project. Not affiliated with The New York Times. <a href="https://github.com/SHexagon-0x6/NYT-Swiss-Knife/blob/main/PRIVACY.md" target="_blank" rel="noopener">Privacy policy</a>.<br><a href="https://lucide.dev/icons/pocket-knife" title="Lucide pocket-knife icon" target="_blank" rel="noopener">Pocket-knife icon adapted from Lucide</a></footer>
+</main>
+</body>
 </html>

@@ -1,7 +1,7 @@
 {
   "name": "nyt-games-swiss-knife",
   "private": true,
-  "version": "1.0.0",
+  "version": "0.7.5",
   "description": "Simple tools to make your NYT gameplay better",
   "license": "MIT",
   "scripts": {
