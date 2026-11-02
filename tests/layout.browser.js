@@ -49,8 +49,8 @@
     { name: 'Sudoku', game: 'sudoku', flag: 'centerNotes' },
     { name: 'Strands', game: 'strands', flag: 'pathDrawing' },
     { name: 'Wordle', game: 'wordle', flag: 'letterProtection' },
-    { name: 'Crossword', game: 'crossword', flag: 'clueHover' },
-    { name: 'Bonus Crossword', game: 'bonuscrossword', flag: 'clueHover' }
+    { name: 'Crossword', game: 'crossword', flag: 'candidateNotes' },
+    { name: 'Bonus Crossword', game: 'bonuscrossword', flag: 'candidateNotes' }
   ];
   const actualGame = game => game === 'bonuscrossword' ? 'crossword' : game;
   const settings = () => shadow.querySelector('.game-settings');

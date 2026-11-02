@@ -251,7 +251,7 @@
     const before = JSON.stringify(state);
     setup('crossword', state, false, { clueHover: true, letterCycle: true, clueNotebook: true, pencilShortcut: true });
     active.refresh();
-    assert(!shadow.querySelector('.mc-notebook,input,textarea,select'), 'removed Crossword notebook is still interactive');
+    assert(!shadow.querySelector('.mc-notebook,input,textarea,select') && !document.querySelector('#margin-crossword-tooltip'), 'removed Crossword tools are still active with legacy preferences');
     assert(JSON.stringify(state) === before && ctx.saves === 0, 'mount changed legacy notebook data');
     assert(nativeClicks + nativeKeys === 0, 'mount generated native input');
   });

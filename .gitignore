@@ -9,3 +9,4 @@ test-results/
 .env.*
 .DS_Store
 store/
+local-build/

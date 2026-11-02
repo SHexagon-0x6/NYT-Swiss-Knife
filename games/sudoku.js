@@ -52,8 +52,39 @@
     const feature = name => ctx.feature ? ctx.feature(name, true) : true;
     const modeEnabled = value => value === 'play' || feature(value === 'corner' ? 'cornerNotes' : 'centerNotes');
     const overlay = svgNode('svg', { 'aria-hidden': 'true', 'data-margin-overlay': 'sudoku' });
-    Object.assign(overlay.style, { position: 'fixed', inset: '0', width: '100vw', height: '100vh', pointerEvents: 'none', zIndex: '2147483000', overflow: 'hidden' });
-    document.documentElement.append(overlay);
+    Object.assign(overlay.style, { position: 'absolute', inset: '0', width: '100%', height: '100%', pointerEvents: 'none', zIndex: '10', overflow: 'hidden' });
+    let overlayBoard = null, boardStyles = [];
+    function restoreBoardLayer() {
+      for (const [name,value,priority] of boardStyles) {
+        if (value) overlayBoard.style.setProperty(name,value,priority);
+        else overlayBoard.style.removeProperty(name);
+      }
+      boardStyles = [];overlayBoard = null;
+    }
+    function placeOverlay() {
+      let parent = board[0]?.closest('.su-board,[data-testid="sudoku-board"],[data-margin-game="sudoku"],.sudoku-board,[role="grid"]') || board[0]?.parentElement;
+      if (parent?.namespaceURI === SVG) parent = parent.parentElement;
+      if (!parent) {overlay.remove();return false;}
+      if (parent !== overlayBoard) {
+        restoreBoardLayer();overlayBoard = parent;
+        for (const [name,value] of [['position','relative'],['isolation','isolate']]) {
+          if (name === 'position' && getComputedStyle(parent).position !== 'static') continue;
+          boardStyles.push([name,parent.style.getPropertyValue(name),parent.style.getPropertyPriority(name)]);
+          parent.style.setProperty(name,value);
+        }
+        parent.append(overlay);lastDrawing = '';
+      }
+      return true;
+    }
+    function dialogOpen() {
+      return [...document.querySelectorAll('dialog[open],[role="dialog"],[aria-modal="true"],[data-native-settings],.su-modal-pause,.xwd__modal--content')].some(visible);
+    }
+    function layerVisibility() {
+      const value = dialogOpen() ? 'hidden' : 'visible';
+      if (overlay.style.visibility !== value) overlay.style.visibility = value;
+    }
+    const modalObserver = new MutationObserver(layerVisibility);
+    modalObserver.observe(document.documentElement,{subtree:true,childList:true,attributes:true,attributeFilter:['class','hidden','open','aria-hidden','aria-modal','style']});
     const status = el('p', { className: 'muted small', role: 'status' });
     const selection = el('p', { className: 'small', textContent: 'Choose Snyder or Center, then an empty cell.' });
     const modes = el('div', { className: 'row sudoku-modes', role: 'group', 'aria-label': 'Mark placement' });
@@ -89,7 +120,7 @@
       updateSelection(); render();
     }
     function shortcutReady() {
-      return !destroyed&&cells().length===81&&![...document.querySelectorAll('dialog[open],[role="dialog"],[aria-modal="true"],[data-native-settings]')].some(visible);
+      return !destroyed&&cells().length===81&&!dialogOpen();
     }
     function selectMode(next) {
       if(!shortcutReady()||!modeEnabled(next))return false;
@@ -253,13 +284,16 @@
     }
     function render() {
       if (destroyed) return;
+      if (!placeOverlay()) return;
+      layerVisibility();
+      const origin = overlay.getBoundingClientRect();
       const drawings = [], nativeHighlight=board.some(isNativeSelected);
       board.forEach((cell, index) => {
         if (filled(cell)) return;
         const rect = cell.getBoundingClientRect();
         if (rect.bottom < 0 || rect.top > innerHeight || rect.right < 0 || rect.left > innerWidth) return;
         const note = ctx.state.sudokuNotes[index] || {};
-        drawings.push({ index, x: rect.x, y: rect.y, width: rect.width, height: rect.height, corner: modeEnabled('corner') ? note.corner || [] : [], center: modeEnabled('center') ? note.center || [] : [], active: selected === index && mode !== 'play' && !nativeHighlight });
+        drawings.push({ index, x: rect.x-origin.x, y: rect.y-origin.y, width: rect.width, height: rect.height, corner: modeEnabled('corner') ? note.corner || [] : [], center: modeEnabled('center') ? note.center || [] : [], active: selected === index && mode !== 'play' && !nativeHighlight });
       });
       const signature = JSON.stringify(drawings);
       if (signature === lastDrawing) return;
@@ -350,6 +384,6 @@
     window.addEventListener('scroll', geometry, true);
     window.addEventListener('resize', geometry);
     chooseMode('play'); refresh();
-    return { refresh, destroy() { destroyed = true; unbindShortcut?.();for(const [node]of focusAttributes)if(node.getAttribute('tabindex')==='-1')node.removeAttribute('tabindex');focusAttributes.clear(); restoreNativeModes(); restoreNativeUndo(); restoreAutoCandidate(); window.removeEventListener('pointerdown', nativeKey, true); window.removeEventListener('pointerup', nativeKey, true); window.removeEventListener('click', nativeKey, true); window.removeEventListener('pointerdown', pick, true); window.removeEventListener('click', pick, true); window.removeEventListener('keydown', keys, true); window.removeEventListener('change', nativeSettingChanged, true); window.removeEventListener('scroll', geometry, true); window.removeEventListener('resize', geometry); tools.remove(); overlay.remove(); } };
+    return { refresh, destroy() { destroyed = true; modalObserver.disconnect();restoreBoardLayer(); unbindShortcut?.();for(const [node]of focusAttributes)if(node.getAttribute('tabindex')==='-1')node.removeAttribute('tabindex');focusAttributes.clear(); restoreNativeModes(); restoreNativeUndo(); restoreAutoCandidate(); window.removeEventListener('pointerdown', nativeKey, true); window.removeEventListener('pointerup', nativeKey, true); window.removeEventListener('click', nativeKey, true); window.removeEventListener('pointerdown', pick, true); window.removeEventListener('click', pick, true); window.removeEventListener('keydown', keys, true); window.removeEventListener('change', nativeSettingChanged, true); window.removeEventListener('scroll', geometry, true); window.removeEventListener('resize', geometry); tools.remove(); overlay.remove(); } };
   } };
 })();

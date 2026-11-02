@@ -1,10 +1,28 @@
 <!doctype html>
 <html lang="en">
-<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>NYT Games Swiss Knife</title><link rel="stylesheet" href="popup.css"></head>
+<head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>NYT Games Swiss Knife</title><script src="popup.js"></script><link rel="stylesheet" href="stats.css"><link rel="stylesheet" href="popup.css"></head>
 <body>
 <header><img class="brand-icon" src="icons/48.png" alt="" width="36" height="36"><h1>NYT Games Swiss Knife</h1></header>
-<main><div id="games" aria-label="Game tools"></div><p id="status" role="status" aria-live="polite"></p></main>
+<main>
+<details id="stats-section">
+<summary id="stats-toggle" aria-controls="stats-panel" aria-expanded="false">Calendar &amp; stats</summary>
+<section id="stats-panel" aria-label="Your stats and calendar">
+  <p id="demo-banner" class="demo-banner" hidden>Sample data · Local preview</p>
+  <div id="calendar-root"></div><p id="stats-status" role="status" aria-live="polite"></p>
+  <details class="data-settings"><summary>Data &amp; sync</summary><div class="data-controls">
+    <label><input id="tracking" type="checkbox" checked> Automatically record finished puzzles</label>
+    <label><input id="sync-enabled" type="checkbox" checked> Use Chrome sync</label>
+    <p id="sync-detail"></p><div class="data-buttons"><button id="retry" type="button">Retry sync</button><button id="export" type="button">Export history</button><button id="clear" class="danger" type="button">Clear history</button></div>
+  </div></details>
+
+</section>
+</details>
+<div id="games" aria-label="Game tools"></div>
+<p id="status" role="status" aria-live="polite"></p>
+</main>
 <footer><a href="help.html" target="_blank" rel="noopener">How to use</a><span>Your tools, your choices</span></footer>
-<script src="shared.js"></script><script src="popup.js"></script>
+<dialog id="clear-dialog"><h2>Clear your history?</h2><p>Delete all saved times on this device and, if enabled, through Chrome sync. Puzzle notes are kept.</p><form method="dialog"><button value="cancel">Keep history</button><button class="danger" value="clear">Clear history</button></form></dialog>
+
+<script src="shared.js"></script><script src="stats.js"></script><script src="stats-calendar.js"></script><script src="stats-panel.js"></script>
 </body>
 </html>

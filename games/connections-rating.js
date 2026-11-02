@@ -21,6 +21,12 @@
     return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
   }
   function previousDate(value) { return new Date(new Date(`${value}T12:00:00Z`).getTime() - 86400000).toISOString().slice(0, 10); }
+  function archiveNumber(date) {
+    // Daily puzzle No. 1 was June 12, 2023. UTC day arithmetic also works across
+    // DST and leap days, after the welcome screen's puzzle number disappears.
+    const number = (Date.parse(`${date}T12:00:00Z`) - Date.parse('2023-06-12T12:00:00Z')) / 86400000 + 1;
+    return Number.isInteger(number) && number > 0 && number < 1000000 ? number : null;
+  }
   function validateCompanionURL(value, date, puzzleNumber = null) {
     if (!validDate(date)) return null;
     let url;
@@ -181,21 +187,29 @@
     }
     function discover(date, archive) {
       const numbers = new Set();
-      for (const node of document.querySelectorAll('h1,h2,h3,[data-testid*="puzzle"],[data-testid*="Puzzle"]')) {
+      for (const node of document.querySelectorAll('h1,h2,h3,[data-testid*="puzzle"],[data-testid*="Puzzle"],.pz-moment__info-date,.pz-moment__info-puzzleNumber')) {
         if (!visible(node)) continue;
         const text = clean(node.innerText);
         const match = text.length < 100 && text.match(/^(?:Connections\s+)?(?:Puzzle\s*#?|No\.?\s*|#)\s*([\d,]+)$/i);
         if (match) numbers.add(Number(match[1].replace(/,/g, '')));
       }
-      if (numbers.size > 1 || (archive && numbers.size !== 1)) return null;
-      const puzzleNumber = numbers.size ? [...numbers][0] : null;
+      const expectedNumber = archive ? archiveNumber(date) : null;
+      if (numbers.size > 1 || (archive && (expectedNumber === null || (numbers.size && !numbers.has(expectedNumber))))) return [];
+      const puzzleNumber = archive ? expectedNumber : numbers.size ? [...numbers][0] : null;
       const links = new Map();
       for (const node of document.querySelectorAll('a[href*="connections-companion-"]')) {
         if (!visible(node)) continue;
         const link = validateCompanionURL(node.href, date, puzzleNumber);
         if (link) links.set(link.url, link);
       }
-      return links.size === 1 ? [...links.values()][0] : null;
+      if (links.size) return links.size === 1 ? [...links.values()] : [];
+      if (!archive) return [];
+      // Archive footers can still link to today's Companion. Use only the
+      // archive's date and daily number, never that unrelated article's rating.
+      // Most Companions appear the day before; older ones may use puzzle day.
+      return [previousDate(date), date].map(articleDate => validateCompanionURL(
+        `${ORIGIN}/${articleDate.replace(/-/g, '/')}/crosswords/connections-companion-${puzzleNumber}.html`, date, puzzleNumber
+      ));
     }
     async function request(link) {
       const controller = new AbortController();
@@ -227,14 +241,21 @@
       if (options.enabled !== true) return result('disabled');
       if (!document || !fetch || location?.origin !== ORIGIN || !/^\/games\/connections(?:\/|$)/.test(location.pathname)) return result('no-link');
       const archive = location.pathname.match(/\/(\d{4})[-/](\d{2})[-/](\d{2})(?:\/|$)/);
-      const date = options.date || (archive ? archive.slice(1, 4).join('-') : localDate());
+      const date = archive ? archive.slice(1, 4).join('-') : options.date || localDate();
       if (!validDate(date)) return result('no-link');
-      const link = discover(date, !!archive);
-      if (!link) return result('no-link');
-      const key = `${date}:${link.url}`;
+      const links = discover(date, !!archive);
+      if (!links.length) return result('no-link');
+      const key = `${date}:${links.map(link => link.url).join('|')}`;
       if (!cache.has(key)) {
         if (cache.size >= 64) cache.delete(cache.keys().next().value);
-        cache.set(key, request(link));
+        cache.set(key, (async () => {
+          let value;
+          for (const link of links) {
+            value = await request(link);
+            if (value.status === 'ok') break;
+          }
+          return value;
+        })());
       }
       return cache.get(key);
     }

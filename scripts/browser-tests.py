@@ -37,7 +37,8 @@ def main():
     args = parser.parse_args()
     if not args.chrome:
         parser.error('Install Chrome/Chromium or supply --chrome /path/to/browser')
-    fixtures = [('popup.html', 5000), ('shortcuts.html', 12000), ('connections.html', 9000), ('connections-inline.html', 3000), ('pencil-drawing.html', 2000), ('wordle-crossword.html', 10000), ('crossword-hover.html', 4000), ('crossword-cycle.html', 55000), ('security.html', 2500), ('shell.html?game=connections', 16000), ('layout.html',35000), ('../preview/tests.html',14000)]
+    fixtures = [('popup.html', 5000), ('shortcuts.html', 12000), ('connections.html', 9000), ('connections-inline.html', 3000), ('pencil-drawing.html', 2000), ('wordle-crossword.html', 10000), ('crossword-cycle.html', 80000), ('security.html', 2500), ('shell.html?game=connections', 16000), ('layout.html',35000), ('../preview/tests.html',14000)]
+    fixtures.append(('crossword-candidates.html', 5000))
     if args.fixture:
         chosen=set(args.fixture)
         fixtures=[item for item in fixtures if item[0].partition('?')[0] in chosen]

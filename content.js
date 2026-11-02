@@ -14,7 +14,7 @@
     sudoku:[['cornerNotes','Snyder'],['centerNotes','Center']],
     strands:[['pathDrawing','Draw paths'],['sketchUndo','Undo sketches'],['sketchVisibility','Hide/show sketches control']],
     wordle:[['letterProtection','Warn about conflicting letters'],['clickToEdit','Click to edit letters']],
-    crossword:[['clueHover','Clues on hover'],['letterCycle','Try letters A–Z']]
+    crossword:[['letterCycle','Try letters A–Z'],['candidateNotes','Notes']]
   };
   let preferenceWrites=Promise.resolve(), geometryFrame=0;
   const slotGeometry=new ResizeObserver(()=>geometry());
@@ -40,6 +40,7 @@
     return el('div',{className:'shortcut-setting',...(mode?{'data-shortcut-mode':mode}:{})},el('span',{textContent:label}),el('div',{className:'row'},button,clear));
   }
   const shortcutControls=shortcutRow('Pencil mode');
+  const candidateShortcutControls=shortcutRow('Notes','candidates');
   const modeShortcuts=el('div',{className:'mode-shortcuts'},...['play','corner','center'].map((mode,i)=>shortcutRow(['Play','Snyder','Center'][i],mode)));
   function recordShortcut(event){
     if(!recordingShortcut||!context)return;
@@ -80,7 +81,7 @@
   const settingsClose=el('button',{type:'button',className:'settings-close','aria-label':'Close notes and settings',textContent:'×',onClick:()=>closeSettings(true)});
   const settingsContent=el('div', {className:'settings-content',role:'region','aria-label':'Puzzle tools and settings'},
     el('div',{className:'settings-heading'},settingsTitle,settingsClose),
-    featurePanel,shortcutControls,modeShortcuts,panel,scratchLabel,el('div',{className:'settings-footer'},savedLabel));
+    featurePanel,shortcutControls,candidateShortcutControls,modeShortcuts,panel,scratchLabel,el('div',{className:'settings-footer'},savedLabel));
   const settingsTrigger=el('summary', {}, settingsIcon,settingsLabel);
   const settings = el('details', {className:'game-settings'},
     settingsTrigger,settingsContent);
@@ -284,11 +285,12 @@
     for(const input of featurePanel.querySelectorAll('[data-feature]'))input.checked=context.feature(input.dataset.feature);
     scratchLabel.hidden=true;
     shortcutControls.hidden=current.game!=='crossword';
+    candidateShortcutControls.hidden=current.game!=='crossword';
     modeShortcuts.hidden=current.game!=='sudoku';
-    for(const row of [shortcutControls,...modeShortcuts.children]){
+    for(const row of [shortcutControls,candidateShortcutControls,...modeShortcuts.children]){
       const mode=row.dataset.shortcutMode,button=row.querySelector('.shortcut-key');
       if(recordingShortcut?.button===button)continue;
-      button.textContent=window.Margin.shortcutLabel(shortcutOptions(context,mode?'sudoku':'crossword',mode));
+      button.textContent=window.Margin.shortcutLabel(shortcutOptions(context,mode&&mode!=='candidates'?'sudoku':'crossword',mode));
       button.setAttribute('aria-pressed','false');
     }
   }
@@ -305,6 +307,7 @@
   function shortcutOptions(ctx,game,mode){
     const saved=ctx?.settings.shortcuts?.[game];
     if(game==='sudoku')return sudokuShortcuts(saved)[mode||'corner'];
+    if(mode==='candidates')return typeof saved?.candidates?.key==='string'?saved.candidates:sameShortcut(saved||{key:'Shift'},{key:'Control'})?{key:''}:{key:'Control'};
     return saved&&typeof saved.key==='string'?saved:{key:'Shift'};
   }
   function sameShortcut(a,b){
@@ -314,7 +317,12 @@
     if(!ctx||!['sudoku','crossword'].includes(game)||game==='sudoku'&&!['play','corner','center'].includes(mode))return;
     recordingShortcut=null;
     const update=saved=>{
-      if(game!=='sudoku')return value;
+      if(game==='crossword'){
+        const pencil=saved&&typeof saved.key==='string'?saved:{key:'Shift'};
+        if(mode==='candidates')return {...pencil,candidates:value,...(sameShortcut(pencil,value)?{key:''}:{})};
+        const candidates=typeof saved?.candidates?.key==='string'?saved.candidates:sameShortcut(pencil,{key:'Control'})?{key:''}:{key:'Control'};
+        return {...value,candidates:sameShortcut(candidates,value)?{key:''}:candidates};
+      }
       const next=sudokuShortcuts(saved);next[mode]=value;
       for(const other of Object.keys(next))if(other!==mode&&sameShortcut(next[other],value))next[other]={key:''};
       return next;
@@ -383,7 +391,8 @@
     const active=context,game=next.game;
     context.feature=(name,fallback)=>{const value=active.settings?.features?.[game]?.[name],definition=FEATURES[game].find(item=>item[0]===name);return typeof value==='boolean'?value:definition?(definition[2]??true):(fallback??true);};
     context.setFeature=(name,enabled)=>setFeature(active,game,name,enabled);
-    context.bindShortcut=callback=>window.Margin.bindShortcut(callback,()=>({...shortcutOptions(active,game),enabled:!!shortcutOptions(active,game).key}));
+    context.bindShortcut=(callback,mode)=>window.Margin.bindShortcut(callback,()=>({...shortcutOptions(active,game,mode),enabled:!!shortcutOptions(active,game,mode).key&&(mode!=='candidates'||active.feature('candidateNotes'))}));
+    context.shortcutLabel=mode=>window.Margin.shortcutLabel(shortcutOptions(active,game,mode));
     context.bindModeShortcuts=(callbacks,ready)=>{
       const releases=Object.entries(callbacks).map(([mode,callback])=>window.Margin.bindShortcut(callback,()=>{
         const value=shortcutOptions(active,'sudoku',mode);

@@ -11,7 +11,7 @@ const read = file => fs.readFileSync(path.join(root, file), 'utf8');
 const manifest = JSON.parse(read('manifest.json'));
 const pkg = JSON.parse(read('package.json'));
 const games = ['connections', 'sudoku', 'strands', 'wordle', 'crossword'];
-const runtime = ['manifest.json', 'LICENSE', 'shared.js', 'content.js', 'ui.css', 'popup.html', 'popup.css', 'popup.js',
+const runtime = ['manifest.json', 'LICENSE', 'shared.js', 'content.js', 'ui.css', 'popup.html', 'popup.css', 'popup.js', 'stats.js', 'stats-calendar.js', 'stats-widget.js', 'stats-worker.js', 'stats-capture.js', 'stats.css', 'stats-panel.js',
   'icons/LICENSE-lucide.txt', 'help.html', 'help.css', 'games/connections-rating.js', ...games.map(game => `games/${game}.js`), ...['connections.svg','sudoku.svg','strands.png','wordle.png','crossword.svg'].map(name => `icons/games/${name}`), ...[16, 32, 48, 128].map(size => `icons/${size}.png`)];
 let checks = 0;
 function check(label, fn) {
@@ -29,7 +29,8 @@ check('Manifest V3 and consistent version', () => {
 });
 check('Storage is the only API permission', () => {
   assert.deepEqual(manifest.permissions, ['storage']);
-  for (const key of ['host_permissions', 'optional_host_permissions', 'optional_permissions', 'externally_connectable', 'background', 'update_url']) assert(!manifest[key], `Unexpected ${key}`);
+  assert.deepEqual(manifest.background, {service_worker:'stats-worker.js'});
+  for (const key of ['host_permissions', 'optional_host_permissions', 'optional_permissions', 'externally_connectable', 'update_url']) assert(!manifest[key], `Unexpected ${key}`);
 });
 check('Content scripts are restricted to supported NYT games', () => {
   assert.equal(manifest.content_scripts.length, 1);
@@ -42,10 +43,10 @@ check('Content scripts are restricted to supported NYT games', () => {
   assert(['document_start', 'document_idle'].includes(script.run_at));
   assert(!script.all_frames);
   assert(!script.world || script.world === 'ISOLATED');
-  assert.deepEqual(script.js, ['shared.js', 'games/connections-rating.js', ...games.map(game => `games/${game}.js`), 'content.js']);
+  assert.deepEqual(script.js, ['shared.js', 'stats.js', 'stats-calendar.js', 'stats-widget.js', 'stats-capture.js', 'games/connections-rating.js', ...games.map(game => `games/${game}.js`), 'content.js']);
 });
-check('Only notebook CSS is exposed to NYT pages', () => {
-  assert.deepEqual(manifest.web_accessible_resources, [{ resources: ['ui.css'], matches: ['https://www.nytimes.com/*'] }]);
+check('Only styles and the toolbar logo are exposed to NYT pages', () => {
+  assert.deepEqual(manifest.web_accessible_resources, [{ resources: ['ui.css','stats.css','icons/32.png'], matches: ['https://www.nytimes.com/*'] }]);
   assert.equal(manifest.content_security_policy.extension_pages, "script-src 'self'; object-src 'none'");
 });
 check('All runtime files exist inside the project', () => {
@@ -95,20 +96,22 @@ check('No executable HTML or external script/style dependencies', () => {
 check('Runtime limits networking to the public rating reader and has no unsafe execution', () => {
   const prohibited = [
     /\bXMLHttpRequest\b/, /\bWebSocket\b/, /\bEventSource\b/, /\bsendBeacon\s*\(/,
-    /\beval\s*\(/, /\bnew\s+Function\s*\(/, /\bimportScripts\s*\(/,
+    /\beval\s*\(/, /\bnew\s+Function\s*\(/,
     /\.(?:innerHTML|outerHTML)\s*=/, /\binsertAdjacentHTML\s*\(/,
-    /chrome\s*\.\s*storage\s*\.\s*sync\b/, /document\s*\.\s*cookie\b/
+    /document\s*\.\s*cookie\b/
   ];
   for (const file of runtime.filter(file => file.endsWith('.js'))) {
     const source = read(file);
+    if(file === 'stats-worker.js') assert.deepEqual(source.match(/importScripts\([^)]*\)/g), ["importScripts('stats.js')"]);
+    else { assert(!/\bimportScripts\s*\(/.test(source)); assert(!/chrome\s*\.\s*storage\s*\.\s*sync\b/.test(source), 'Sync is owned by the stats worker'); }
     if(file!=='games/connections-rating.js')assert(!/\bfetch\s*\(/.test(source), `Unexpected network request in ${file}`);
     for (const pattern of prohibited) assert(!pattern.test(source), `${pattern} in ${file}`);
   }
   for (const file of runtime.filter(file => file.endsWith('.css'))) assert(!/@import|url\(\s*["']?(?:https?:|\/\/)/i.test(read(file)), `Remote CSS dependency in ${file}`);
 });
 check('No hidden solution state or answer APIs in game adapters', () => {
-  for (const game of games) {
-    const source = read(`games/${game}.js`);
+  for (const game of [...games.map(g => `games/${g}.js`),'stats-capture.js']) {
+    const source = read(game);
     assert(!/window\.__|__NEXT_DATA__|__PRELOADED_STATE__|localStorage|sessionStorage|dictionaryapi|api\.nytimes/i.test(source), `Hidden game state or answer API in ${game}`);
   }
 });

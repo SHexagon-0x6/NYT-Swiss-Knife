@@ -101,19 +101,30 @@
     shadow().querySelector('[data-shortcut-mode="corner"] .shortcut-clear').click();modal.remove();await wait(180);tap('p');tap('Control');assert(mode()==='Play','Clearing one shortcut leaves other mode keys working');
     const record=Object.values(await storage.all()).find(value=>value?.game==='sudoku');assert(record.state.sudokuNotes[1].corner.join('')==='1'&&record.state.sudokuNotes[1].center.join('')==='2','Reconfiguring shortcuts preserves both mark types');
     const crossword=el('div',{className:'crossword-board','data-margin-game':'crossword'});
-    for(let i=0;i<25;i++)crossword.append(el('div',{'data-margin-crossword-cell':'','data-row':String(Math.floor(i/5)),'data-col':String(i%5),'data-number':i===0?'1':'','data-block':'false',tabIndex:0}));
+    for(let i=0;i<25;i++)crossword.append(el('div',{'data-margin-crossword-cell':'','data-row':String(Math.floor(i/5)),'data-col':String(i%5),'data-number':i===0?'1':'','data-block':'false','aria-selected':String(i===0),tabIndex:0}));
     const pencil=el('button',{'aria-label':'Pencil',textContent:'Pencil',onClick:()=>nativePencilClicks++});
-    fixtures.replaceChildren(toolbar,crossword,pencil);route('crossword');await until(()=>setting('clueHover'),'Crossword did not mount');
+    fixtures.replaceChildren(toolbar,crossword,pencil);route('crossword');await until(()=>setting('candidateNotes'),'Crossword did not mount');
     tap('Shift');assert(nativePencilClicks===1,'Crossword modifier shortcut clicks its native Pencil button');
+    const candidateToggle=()=>document.querySelector('#margin-crossword-cycle').shadowRoot.querySelector('[data-notes-action="toggle"]');
+    const candidateActive=()=>candidateToggle().getAttribute('aria-pressed')==='true';
+    tap('Control');assert(candidateActive()&&nativePencilClicks===1,'Ctrl defaults to candidates without toggling native Pencil');
+    tap('Control');assert(!candidateActive(),'A second Ctrl tap returns to native letter entry');
     settingsButton.click();await wait(180);setKey('Alt');modal.remove();await wait(180);tap('Shift');tap('Alt');assert(nativePencilClicks===2,'Crossword uses its independently recorded shortcut');
     settingsButton.click();await wait(180);shadow().querySelector('.shortcut-setting:not([data-shortcut-mode]) .shortcut-clear').click();modal.remove();await wait(180);tap('Alt');assert(nativePencilClicks===2,'Crossword pencil shortcut can be disabled');
+    settingsButton.click();await wait(180);setKey('N','candidates');modal.remove();await wait(180);
+    tap('n');assert(candidateActive(),'A custom letter activates candidate mode');tap('n');assert(!candidateActive(),'A custom letter also exits candidate mode without adding a candidate');
+    settingsButton.click();await wait(180);setKey('Control');setKey('Control','candidates');modal.remove();await wait(180);tap('Control');
+    assert(candidateActive()&&nativePencilClicks===2&&keyChoice().textContent==='Off','Assigning a conflicting candidate shortcut clears Pencil rather than triggering both');
+    tap('Control');settingsButton.click();await wait(180);setFeature('candidateNotes',false);modal.remove();await wait(180);tap('Control');
+    assert(!candidateActive()&&candidateToggle().hidden,'Disabled candidates ignore their shortcut');
+    settingsButton.click();await wait(180);setFeature('candidateNotes',true);modal.remove();await wait(180);
     fixtures.replaceChildren(toolbar,sudoku);route('sudoku');await until(()=>setting('cornerNotes'),'Sudoku did not remount');
     assert(keyChoice('corner').textContent==='Off'&&keyChoice('play').textContent==='P'&&keyChoice('center').textContent==='C'&&mode()==='Play','Disabled custom shortcuts persist across game switches');
     tap('Alt');assert(nativePencilClicks===2,'Removed Crossword listeners do not affect another game');
-    const kept=await storage.get('settings');assert(kept.keepPreference==='kept'&&kept.features.wordle.clickToEdit===false&&kept.shortcuts.sudoku.corner.key===''&&kept.shortcuts.sudoku.play.key==='P'&&kept.shortcuts.sudoku.center.key==='C'&&kept.shortcuts.crossword.key==='','Shortcut persistence preserves unrelated preferences and independent game choices');
-    await storage.set('settings',{...kept,shortcuts:{sudoku:{key:'Alt'}}});route('crossword');await until(()=>setting('clueHover'),'Legacy route reset');route('sudoku');await until(()=>setting('cornerNotes'),'Legacy Sudoku did not mount');
+    const kept=await storage.get('settings');assert(kept.keepPreference==='kept'&&kept.features.wordle.clickToEdit===false&&kept.shortcuts.sudoku.corner.key===''&&kept.shortcuts.sudoku.play.key==='P'&&kept.shortcuts.sudoku.center.key==='C'&&kept.shortcuts.crossword.key===''&&kept.shortcuts.crossword.candidates.key==='Control','Shortcut persistence preserves unrelated preferences and independent game choices');
+    await storage.set('settings',{...kept,shortcuts:{sudoku:{key:'Alt'}}});route('crossword');await until(()=>setting('candidateNotes'),'Legacy route reset');route('sudoku');await until(()=>setting('cornerNotes'),'Legacy Sudoku did not mount');
     assert(keyChoice('corner').textContent==='Alt'&&keyChoice('play').textContent==='P'&&keyChoice('center').textContent==='C','Legacy custom keys migrate to Snyder while the other two receive defaults');
-    await storage.set('settings',{...kept,shortcuts:{sudoku:{key:''}}});route('crossword');await until(()=>setting('clueHover'),'Disabled legacy route reset');route('sudoku');await until(()=>setting('cornerNotes'),'Disabled legacy Sudoku did not mount');
+    await storage.set('settings',{...kept,shortcuts:{sudoku:{key:''}}});route('crossword');await until(()=>setting('candidateNotes'),'Disabled legacy route reset');route('sudoku');await until(()=>setting('cornerNotes'),'Disabled legacy Sudoku did not mount');
     assert(['play','corner','center'].every(n=>keyChoice(n).textContent==='Off'),'Legacy disabled shortcuts stay disabled after migration');
   } catch (error) { results.push(`FAIL ${error.stack}`); }
   finally {

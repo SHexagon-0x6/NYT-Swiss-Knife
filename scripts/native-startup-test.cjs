@@ -46,9 +46,9 @@ async function gameReady(url){await send('Page.navigate',{url});await wait(1000)
  assert(groups===4,'A fresh Incognito Connections game shows all four categories despite old solved flags in shared storage');
  await evaluate(`document.querySelector('[data-testid="card-label"]').scrollIntoView({block:'center',behavior:'instant'})`);await wait(450);
  const point=await evaluate(`(()=>{const r=document.querySelector('[data-testid="card-label"]').getBoundingClientRect();return{x:r.x+r.width/2,y:r.y+r.height/2}})()`);await send('Input.dispatchMouseEvent',{type:'mouseMoved',...point});await wait(350);
- assert(await inside('#margin-connections-overlay',`function(){return this.querySelectorAll('button').length>=4&&this.querySelectorAll('.empty.revealed').length===4}`),'Incognito hover reveals all four usable tile corners after the start screen');
- await ownClick('#margin-connections-overlay','[data-corner="tl"]');
- assert(await inside('#margin-connections-overlay',`function(){return !!this.querySelector('[data-corner="tl"][aria-pressed="true"]')}`),'A real Incognito click creates a yellow mark');
+ assert(await inside('[data-margin-overlay="connections"]',`function(){return this.querySelectorAll('button').length>=4&&this.querySelectorAll('.empty.revealed').length===4}`),'Incognito hover reveals all four usable tile corners after the start screen');
+ await ownClick('[data-margin-overlay="connections"]','[data-corner="tl"]');
+ assert(await inside('[data-margin-overlay="connections"]',`function(){return !!this.querySelector('[data-corner="tl"][aria-pressed="true"]')}`),'A real Incognito click creates a yellow mark');
  const saved=(await send('Extensions.getStorageItems',{id:loaded.id,storageArea:'local'},session)).data;
  assert(!Object.values(saved).some(n=>n?.state?.solvedColors),'Solved display state is removed from shared extension records');
  await gameReady('https://www.nytimes.com/puzzles/sudoku/easy');

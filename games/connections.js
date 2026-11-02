@@ -39,8 +39,14 @@
   }
 
   function selected(node) {
-    return node.getAttribute('aria-pressed') === 'true' || node.getAttribute('data-selected') === 'true' ||
-      /(?:^|[\s_-])selected(?:[\s_-]|$)/i.test(node.className || '') ||
+    const marked = /(?:^|[\s_-])selected(?:[\s_-]|$)/i.test(node.className || '');
+    // NYT updates the visible selected class, but its uncontrolled checkbox
+    // property can stay checked after Deselect All or become unchecked on a
+    // reselected word. Never combine that stale property with the live class.
+    if (node.matches('[class*="Card-module_label__"]')) return marked;
+    if (node.hasAttribute('aria-pressed')) return node.getAttribute('aria-pressed') === 'true';
+    if (node.hasAttribute('data-selected')) return node.getAttribute('data-selected') === 'true';
+    return marked ||
       node.querySelector('input[type="checkbox"]:checked') !== null ||
       node.querySelector('[aria-pressed="true"]') !== null;
   }
@@ -100,9 +106,9 @@
     delete state.solvedColors;
     state.marks = normalized;
     let board = [], toolbarSlot = null, triesSlot = null, filter = null;
-    let hoveredWord = null, focusedWord = null, overlaySignature = '';
+    let hoveredWord = null, focusedWord = null;
     let publishedRating = null, ratingPending = false, ratingCheckedAt = 0;
-    let pending = null, deadline = null, destroyed = false;
+    let pending = null, deadline = null, destroyed = false, staged = null, motionTimer = null, moving = false;
     let activePopup = null, popupTrigger = null, editingGroup = null, filterBeforeClick = null;
     const undoStack = [], listeners = [];
     // Solved groups belong to this game view, not shared extension storage.
@@ -175,8 +181,12 @@
       state.marks = undoStack.pop(); pruneUndo();
       ctx.save(); renderOverlay();
     } });
+    const clearAllButton = el('button', {className:'button',type:'button',textContent:'Clear marks','aria-label':'Clear all marks',disabled:true,onClick:() => {
+      if (!feature('cornerLabels') || !Object.values(state.marks).some(marks => Object.keys(marks).length)) return;
+      snapshotMarks();state.marks = {};ctx.save();renderOverlay();
+    }});
     panel.append(style);
-    if(!integrated)panel.append(undoButton);
+    if(!integrated)panel.append(undoButton,clearAllButton);
 
     const inlineDifficulty = el('span', { className: 'connection-inline-difficulty', role: 'status', 'aria-live': 'polite' });
     const swatches = el('div', { className: 'connection-swatches', role: 'group', 'aria-label': 'Your four categories' });
@@ -310,84 +320,95 @@
       if (activePopup && event.key === 'Escape') { event.preventDefault(); event.stopImmediatePropagation(); closePopup(true); }
     }, true);
 
-    const overlay = el('div', { id: 'margin-connections-overlay', 'data-margin-overlay': 'connections' });
-    Object.assign(overlay.style, { position: 'fixed', inset: '0', pointerEvents: 'none', zIndex: '2147483000' });
-    const overlayRoot = overlay.attachShadow({ mode: ctx.shadowMode || (ctx.isPreview ? 'open' : 'closed') });
-    const overlayContent = el('div');
-    overlayRoot.append(el('style', { textContent: `
-      :host{all:initial}*{box-sizing:border-box}[hidden]{display:none!important}.corner-handle{position:absolute;width:var(--corner-size,32px);height:var(--corner-size,32px);padding:0;border:0;background:none;border-radius:0;pointer-events:auto;cursor:pointer}.corner-handle::before{content:'';position:absolute;inset:0;background:var(--tag-bg);clip-path:polygon(0 0,100% 0,0 100%)}
+    // Corners live inside their tile. The browser applies the tile's press-scale,
+    // border radius, scrolling and layout to both in the same frame.
+    const markers = new Map();
+    const cornerCSS = `
+      :host{all:initial}*{box-sizing:border-box}[hidden]{display:none!important}
+      .corner-handle{position:absolute;width:var(--corner-size,32px);height:var(--corner-size,32px);padding:0;border:0;background:none;border-radius:0;pointer-events:auto;cursor:pointer}
+      .corner-handle::before{content:'';position:absolute;inset:0;background:var(--tag-bg);clip-path:polygon(0 0,100% 0,0 100%)}
+      [data-corner=tl]{left:0;top:0}[data-corner=tr]{right:0;top:0}[data-corner=bl]{left:0;bottom:0}[data-corner=br]{right:0;bottom:0}
       [data-corner=tr]::before{clip-path:polygon(0 0,100% 0,100% 100%)}[data-corner=bl]::before{clip-path:polygon(0 0,0 100%,100% 100%)}[data-corner=br]::before{clip-path:polygon(100% 0,0 100%,100% 100%)}
-      .corner-handle.empty{opacity:0;pointer-events:none}.corner-handle.empty.revealed,.corner-handle.empty:focus-visible{opacity:.38;pointer-events:auto}.corner-handle:hover::before{filter:brightness(.92)}.corner-handle:focus-visible{outline:2px solid #111;outline-offset:1px}
+      .corner-handle.empty{opacity:0;pointer-events:none}.corner-handle.empty.revealed,.corner-handle.empty:focus-visible{opacity:.38;pointer-events:auto}
+      .corner-handle:hover::before{filter:brightness(.92)}.corner-handle:focus-visible{outline:2px solid #111;outline-offset:-2px}
       @media(pointer:coarse){.corner-handle.empty{opacity:.38;pointer-events:auto}}
-    ` }), overlayContent);
-    document.body.append(overlay);
-    for (const type of ['pointerdown', 'pointerup', 'click', 'keydown', 'keyup']) listen(overlayRoot, type, event => event.stopPropagation());
-    listen(overlayRoot, 'pointerover', event => {
-      const word = event.target.closest?.('[data-word]')?.dataset.word;
-      if (word) { hoveredWord = word; paintCornerHover(); }
-    });
-    listen(overlayRoot, 'pointerout', event => {
-      const next = event.relatedTarget;
-      if (next && overlayRoot.contains(next)) return;
-      const tile = board.find(node => node === next || node.contains(next));
-      hoveredWord = tile ? wordOf(tile) : null; if(tile)renderOverlay();paintCornerHover();
-    });
-    listen(overlayRoot, 'focusin', event => {
-      const word = event.target.closest?.('[data-word]')?.dataset.word;
-      focusedWord=word&&event.target.matches(':focus-visible')?word:null;paintCornerHover();
-    });
-    listen(overlayRoot,'focusout',event=>{
-      if(!overlayRoot.contains(event.relatedTarget)){focusedWord=null;paintCornerHover();}
-    });
+    `;
+    function removeMarker(tile, marker) {
+      marker.host.remove();
+      if (marker.position) {
+        const [value,priority] = marker.position;
+        if (value) tile.style.setProperty('position',value,priority);
+        else tile.style.removeProperty('position');
+      }
+      markers.delete(tile);
+    }
+    function clearMarkers() {for (const [tile,marker] of markers) removeMarker(tile,marker);}
+    function createMarker(tile) {
+      const host = el('div',{'data-margin-overlay':'connections'});
+      Object.assign(host.style,{position:'absolute',inset:'0',display:'block',borderRadius:'inherit',overflow:'hidden',pointerEvents:'none',zIndex:'2'});
+      const root = host.attachShadow({mode:ctx.shadowMode || (ctx.isPreview ? 'open' : 'closed')});
+      const content = el('div');root.append(el('style',{textContent:cornerCSS}),content);
+      const position = getComputedStyle(tile).position === 'static' ? [tile.style.getPropertyValue('position'),tile.style.getPropertyPriority('position')] : null;
+      if (position) tile.style.setProperty('position','relative');
+      // NYT selects on mousedown. Corner gestures must not activate the label
+      // or its checkbox, even though the controls now live inside that label.
+      for (const type of ['pointerdown','pointerup','mousedown','mouseup','click','keydown','keyup']) root.addEventListener(type,event => {
+        event.stopPropagation();
+        if (type === 'pointerdown' || type === 'mousedown') event.preventDefault();
+      });
+      root.addEventListener('pointerover',() => {hoveredWord = wordOf(tile);paintCornerHover();});
+      root.addEventListener('pointerout',event => {
+        if (event.relatedTarget && root.contains(event.relatedTarget)) return;
+        hoveredWord = tile.contains(event.relatedTarget) ? wordOf(tile) : null;paintCornerHover();
+      });
+      root.addEventListener('focusin',event => {focusedWord = event.target.matches?.(':focus-visible') ? wordOf(tile) : null;paintCornerHover();});
+      root.addEventListener('focusout',event => {if (!root.contains(event.relatedTarget)) {focusedWord = null;paintCornerHover();}});
+      const marker = {host,root,content,position,signature:''};markers.set(tile,marker);tile.append(host);return marker;
+    }
     listen(window,'pointerdown',()=>{focusedWord=null;paintCornerHover();},true);
     function renderOverlay() {
       if (destroyed) return;
-      overlay.hidden = !feature('cornerLabels');
-      if (overlay.hidden) return;
-      const drawn = [];
+      clearAllButton.disabled = !Object.values(state.marks).some(marks => Object.keys(marks).length);
+      if (moving || !feature('cornerLabels') || solvedColors.size === 4) {clearMarkers();return;}
+      for (const [tile,marker] of markers) if (!board.includes(tile) || !tile.isConnected) removeMarker(tile,marker);
       for (const tile of board) {
-        if (!visible(tile)) continue;
-        const rect = tile.getBoundingClientRect();
-        const centerX = rect.left + rect.width / 2, centerY = rect.top + rect.height / 2;
-        if (centerX < 0 || centerX > innerWidth || centerY < 0 || centerY > innerHeight) continue;
-        const hit = document.elementFromPoint(centerX, centerY);
-        if (hit !== tile && !tile.contains(hit)) continue;
-        const word = wordOf(tile), marks = state.marks[word] || {}, size=Math.max(18,Math.min(34,Math.floor((Math.min(rect.width,rect.height)-4)/2)));
-        CORNERS.forEach(([position], index) => { if(solvedColors.has(index))return; drawn.push({ word, position, index, size, marked: marks[position] === index,
-          left: Math.round(position.endsWith('r') ? rect.right - size - 1 : rect.left + 1),
-          top: Math.round(position.startsWith('b') ? rect.bottom - size - 1 : rect.top + 1) }); });
+        const marker = markers.get(tile) || createMarker(tile);
+        if (marker.host.parentNode !== tile) tile.append(marker.host);
+        const word = wordOf(tile), marks = state.marks[word] || {};
+        // Intrinsic dimensions do not shrink during the native press animation.
+        const size = Math.max(18,Math.min(34,Math.floor((Math.min(tile.clientWidth,tile.clientHeight)-4)/2)));
+        const signature = JSON.stringify({word,marks,size,filter,labels:state.labels,solved:[...solvedColors]});
+        if (signature === marker.signature) continue;
+        marker.signature = signature;
+        const focused = marker.root.activeElement, restore = focused?.matches(':focus-visible') ? focused.dataset.corner : null;
+        marker.content.replaceChildren(...CORNERS.flatMap(([position],index) => {
+          if (solvedColors.has(index)) return [];
+          const marked = marks[position] === index;
+          const badge = el('button',{className:`corner-handle${marked ? '' : ' empty'}`,type:'button',hidden:filter !== null && filter !== index,
+            'data-word':word,'data-corner':position,'data-color':String(index),'aria-pressed':String(marked),
+            'aria-label':`${marked ? 'Remove' : 'Add'} group ${'ABCD'[index]}: ${state.labels[index]}, ${CORNERS[index][2].toLowerCase()} on ${word}`,
+            title:`${state.labels[index]} · ${['Yellow','Green','Blue','Purple'][index]} · ${word}. Click to ${marked ? 'remove' : 'mark'}.`,
+            onClick:event => {event.preventDefault();event.stopPropagation();changeMark(word,position);}});
+          badge.style.setProperty('--corner-size',`${size}px`);badge.style.setProperty('--tag-bg',COLORS[index]);return [badge];
+        }));
+        if (restore) marker.content.querySelector(`[data-corner="${restore}"]`)?.focus({preventScroll:true});
       }
-      const signature = JSON.stringify({ drawn, filter, labels: state.labels });
-      if (signature === overlaySignature) return;
-      overlaySignature = signature;
-      const focused = overlayRoot.activeElement;
-      const restore = focused?.matches(':focus-visible') ? `${focused.dataset.word}:${focused.dataset.corner}` : null;
-      overlayContent.replaceChildren(...drawn.map(mark => {
-        const cornerName = CORNERS[mark.index][2].toLowerCase();
-        const badge = el('button', { className: `corner-handle${mark.marked ? '' : ' empty'}`, type: 'button', hidden: filter !== null && filter !== mark.index,
-          'data-word': mark.word, 'data-corner': mark.position, 'data-color': String(mark.index),
-          'aria-label': `${mark.marked ? 'Remove' : 'Add'} group ${'ABCD'[mark.index]}: ${state.labels[mark.index]}, ${cornerName} on ${mark.word}`,
-          'aria-pressed': String(mark.marked), title: `${state.labels[mark.index]} · ${['Yellow','Green','Blue','Purple'][mark.index]} · ${mark.word}. Click to ${mark.marked ? 'remove' : 'mark'}.`,
-          onClick: event => { event.preventDefault(); event.stopPropagation(); changeMark(mark.word, mark.position); } });
-        Object.assign(badge.style, { left: `${mark.left}px`, top: `${mark.top}px` });badge.style.setProperty('--corner-size',`${mark.size}px`);
-        badge.style.setProperty('--tag-bg', COLORS[mark.index]);
-        return badge;
-      }));
       paintCornerHover();
-      if (restore) Array.from(overlayContent.children).find(node => !node.hidden && `${node.dataset.word}:${node.dataset.corner}` === restore)?.focus({ preventScroll: true });
     }
     function paintCornerHover() {
-      for (const button of overlayContent.querySelectorAll('.corner-handle.empty')) button.classList.toggle('revealed', button.dataset.word === hoveredWord || button.dataset.word === focusedWord);
+      for (const {content} of markers.values()) for (const button of content.querySelectorAll('.corner-handle.empty')) {
+        button.classList.toggle('revealed',button.dataset.word === hoveredWord || button.dataset.word === focusedWord);
+      }
     }
     function trackWordHover(event) {
-      if (event.target.closest?.('#margin-connections-overlay')) return;
+      if (event.target.closest?.('[data-margin-overlay="connections"]')) return;
       const tile = board.find(node => node === event.target || node.contains(event.target));
-      hoveredWord = tile ? wordOf(tile) : null; if(tile)renderOverlay();paintCornerHover();
+      hoveredWord = tile ? wordOf(tile) : null;paintCornerHover();
     }
     function trackWordFocus(event) {
-      if (event.target.closest?.('#margin-connections-overlay')) return;
+      if (event.target.closest?.('[data-margin-overlay="connections"]')) return;
       const tile = board.find(node => node === event.target || node.contains(event.target));
-      focusedWord = tile&&event.target.matches?.(':focus-visible') ? wordOf(tile) : null; paintCornerHover();
+      focusedWord = tile && event.target.matches?.(':focus-visible') ? wordOf(tile) : null;paintCornerHover();
     }
     function syncUndo() {
       if(!integrated)return;
@@ -395,16 +416,18 @@
       const submit=nativeButtons.find(node=>/^submit$/i.test(clean(node.textContent)));
       if(!submit){if(undoSlot)undoSlot.getRootNode().host.hidden=true;return;}
       undoSlot=ctx.inline('connections-undo',submit,'before',{width:'auto',display:'inline-block'});
-      if(undoButton.parentNode!==undoSlot)undoSlot.replaceChildren(el('style',{textContent:css+' .connection-undo:disabled{opacity:.5;cursor:default}'}),undoButton);
+      if(undoButton.parentNode!==undoSlot)undoSlot.replaceChildren(el('style',{textContent:css+' .connection-undo:disabled{opacity:.5;cursor:default}'}),undoButton,clearAllButton);
       const host=undoSlot.getRootNode().host;
       host.hidden=!feature('cornerLabels');
       Object.assign(host.style,{width:'auto',maxWidth:'none',margin:'0',display:'inline-flex',flex:'0 0 auto',alignSelf:'center',alignItems:'center'});
-      Object.assign(undoSlot.style,{display:'flex',alignItems:'center',justifyContent:'center'});
-      undoButton.classList.add('connection-undo');
+      Object.assign(undoSlot.style,{display:'flex',alignItems:'center',justifyContent:'center',gap:'8px'});
+      undoButton.classList.add('connection-undo');clearAllButton.classList.add('connection-undo');
       const sample=nativeButtons.find(node=>/^shuffle$/i.test(clean(node.textContent)))||submit;
       const styles=getComputedStyle(sample);
-      for(const prop of ['fontFamily','fontSize','fontWeight','lineHeight','border','borderRadius','backgroundColor','color','padding','height','minWidth','boxSizing'])undoButton.style[prop]=styles[prop];
-      undoButton.style.margin='0';
+      for (const button of [undoButton,clearAllButton]) {
+        for(const prop of ['fontFamily','fontSize','fontWeight','lineHeight','border','borderRadius','backgroundColor','color','padding','height','minWidth','boxSizing'])button.style[prop]=styles[prop];
+        button.style.margin='0';
+      }
       const row=submit.parentElement;
       if(actionRow!==row){
         if(actionRow)actionRow.style.flexWrap=actionWrap;
@@ -461,21 +484,54 @@
       }).catch(() => {}).finally(() => { ratingPending = false; if (!destroyed) refresh(); });
     }
 
-    function rememberSubmission() {
-      if (pending || !feature('attemptHistory')) return;
-      const words = selectedWords();
+    function snapshotSubmission() {
+      return {words:selectedWords(),initialWords:tiles().map(wordOf),initialFeedback:feedbackText(),initialMistakes:remainingMistakes()};
+    }
+    function settleMarks() {
+      if (destroyed) return;
+      const animating = document.getAnimations().some(animation => animation.playState === 'running' &&
+        board.some(tile => tile === animation.effect?.target || tile.contains(animation.effect?.target) || animation.effect?.target?.contains(tile)));
+      if (pending || animating) {motionTimer = setTimeout(settleMarks,200);return;}
+      moving = false;board = tiles();renderOverlay();
+    }
+    function suspendMarks() {
+      // Remove every corner host before the native submit handler can animate
+      // or clone the tiles. Saved annotations stay in state.
+      moving = true;clearMarkers();
+      hoveredWord = focusedWord = null;
+      clearTimeout(motionTimer);motionTimer = setTimeout(settleMarks,250);
+    }
+    function finishAttempt(result, source) {
+      if (!pending) return;
+      const entry = pending.entry;
+      if (result === 'duplicate') state.attempts = state.attempts.filter(attempt => attempt.id !== entry.id);
+      else {entry.result = result;entry.source = source;}
+      clearTimeout(pending.lossTimer);clearTimeout(deadline);pending = null;
+      ctx.save();renderHistory();
+    }
+    function rememberSubmission(snapshot = snapshotSubmission()) {
+      const {words} = snapshot;
       if (words.length !== 4) return;
-      pending = { words, initialWords:tiles().map(wordOf), initialFeedback: feedbackText(), initialMistakes: remainingMistakes(), lossTimer: null,
+      suspendMarks();
+      if (!feature('attemptHistory')) return;
+      // A fast next submission must not be dropped while the previous result settles.
+      if (pending) {
+        captureFeedback();
+        if (pending) {
+          const count = remainingMistakes(), missed = pending.initialMistakes !== null && count !== null && count < pending.initialMistakes;
+          finishAttempt(missed ? 'incorrect' : 'unconfirmed',missed ? 'nyt-mistake-count' : 'observed-submit');
+        }
+      }
+      const entry = addAttempt(words,'unconfirmed','observed-submit');
+      pending = { ...snapshot, entry, lossTimer: null,
         seenClear: false, observedFeedbackMutation: false, started: Date.now() };
       clearTimeout(deadline);
       deadline = setTimeout(() => {
         if (pending) {
           // Keep the submitted words even when no feedback text was observed.
           const count = remainingMistakes();
-          if (pending.initialMistakes !== null && count !== null && count < pending.initialMistakes) addAttempt(pending.words, 'incorrect', 'nyt-mistake-count');
-          else addAttempt(pending.words, 'unconfirmed', 'observed-submit');
-          clearTimeout(pending.lossTimer);
-          pending = null;
+          if (pending.initialMistakes !== null && count !== null && count < pending.initialMistakes) finishAttempt('incorrect','nyt-mistake-count');
+          else finishAttempt('unconfirmed','observed-submit');
         }
       }, 4500);
     }
@@ -483,18 +539,26 @@
     function onSubmitClick(event) {
       const button = event.target.closest?.('button, [role="button"], [data-margin-submit]');
       if (!button || button.closest(OWN_UI) || button.disabled || button.getAttribute('aria-disabled') === 'true') return;
-      if (button.matches('[data-margin-submit]') || /^submit$/i.test(clean(button.textContent))) rememberSubmission();
+      if (button.matches('[data-margin-submit]') || /^submit$/i.test(clean(button.textContent))) {
+        const snapshot = staged?.button === button && Date.now()-staged.time < 2000 ? staged.snapshot : snapshotSubmission();
+        staged = null;
+        // A keyboard activation can produce a click for the same submission.
+        if (pending?.keyboard && Date.now()-pending.started < 400 && pending.words.join('|') === snapshot.words.join('|')) return;
+        rememberSubmission(snapshot);
+      }
     }
 
     function onKey(event) {
       if (event.key !== 'Enter' || event.repeat || event.isComposing || event.defaultPrevented ||
-          event.metaKey || event.ctrlKey || event.altKey || event.shiftKey ||
-          event.target.closest?.(`${OWN_UI}, input, textarea, select, [contenteditable="true"]`)) return;
+          event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) return;
+      const tileInput = event.target.matches?.('input[type="checkbox"]') && tiles().some(tile => tile.contains(event.target));
+      if (event.target.closest?.(OWN_UI) ||
+          !tileInput && event.target.closest?.('input, textarea, select, [contenteditable="true"]')) return;
       const control = event.target.closest?.('button, a, [role="button"], [data-margin-submit]');
       // Enter activates a focused control. Shuffle, Deselect, and tile selection are not submissions.
       if (control && (!control.matches('[data-margin-submit]') && !/^submit$/i.test(clean(control.textContent)))) return;
       if (control?.disabled || control?.getAttribute('aria-disabled') === 'true') return;
-      rememberSubmission();
+      rememberSubmission();if (pending) pending.keyboard = true;
     }
 
     function captureFeedback() {
@@ -503,15 +567,15 @@
       if (!text) pending.seenClear = true;
       const kind = feedbackKind(text);
       if (kind && (text !== pending.initialFeedback || pending.seenClear || pending.observedFeedbackMutation)) {
-        if (kind !== 'duplicate') addAttempt(pending.words, kind, 'nyt-feedback');
-        clearTimeout(pending.lossTimer);
-        pending = null;
-        clearTimeout(deadline);
+        finishAttempt(kind,'nyt-feedback');
         return;
       }
-      const remaining=tiles().map(wordOf);
-      if(remaining.length===pending.initialWords.length-4&&pending.words.every(word=>!remaining.includes(word))&&remaining.every(word=>pending.initialWords.includes(word))){
-        addAttempt(pending.words,'unconfirmed','observed-submit');clearTimeout(pending.lossTimer);clearTimeout(deadline);pending=null;return;
+      for (const row of document.querySelectorAll('[class*="SolvedCategory-module_solvedCategory"],[data-testid="solved-category"]')) {
+        if (!visible(row) || row.closest(OWN_UI)) continue;
+        const words = Array.from(row.querySelectorAll('[class*="SolvedCategory-module_cardListItem"],[data-solved-word]')).map(wordOf);
+        if (words.length === 4 && pending.words.every(word => words.includes(word))) {
+          finishAttempt('correct','visible-solved-group');return;
+        }
       }
       const count = remainingMistakes();
       if (pending.initialMistakes !== null && count !== null && count < pending.initialMistakes && pending.lossTimer === null) {
@@ -522,9 +586,7 @@
           if (pending !== attempt) return;
           const current = remainingMistakes();
           if (current !== null && current < attempt.initialMistakes) {
-            addAttempt(attempt.words, 'incorrect', 'nyt-mistake-count');
-            pending = null;
-            clearTimeout(deadline);
+            finishAttempt('incorrect','nyt-mistake-count');
           }
         }, 750);
       }
@@ -532,10 +594,12 @@
 
     function addAttempt(words, result, source) {
       if (!feature('attemptHistory')) return;
-      state.attempts.push({ id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, words: words.slice(), result, source, time: Date.now() });
+      const entry = { id: `${Date.now()}-${Math.random().toString(36).slice(2, 7)}`, words: words.slice(), result, source, time: Date.now() };
+      state.attempts.push(entry);
       if (state.attempts.length > 50) state.attempts.shift();
       ctx.save();
       renderHistory();
+      return entry;
     }
 
     function renderHistory() {
@@ -553,7 +617,7 @@
       board = tiles();
       syncSolvedColors();syncUndo();
       if (!feature('attemptHistory') && pending) { clearTimeout(deadline); clearTimeout(pending.lossTimer); pending = null; }
-      swatches.hidden = !feature('cornerLabels'); undoButton.hidden = !feature('cornerLabels');
+      swatches.hidden = !feature('cornerLabels'); undoButton.hidden = clearAllButton.hidden = !feature('cornerLabels');
       inlineDifficulty.hidden = !feature('difficulty'); triesButton.hidden = !feature('attemptHistory');
       if (activePopup === historyPopup && !feature('attemptHistory') || activePopup === renamePopup && !feature('cornerLabels')) closePopup();
       paintGroups(); syncInline();
@@ -573,32 +637,43 @@
     listen(document, 'focusin', trackWordFocus, true);
     listen(window, 'blur', () => { hoveredWord = null; focusedWord = null; paintCornerHover(); closePopup(); });
     listen(document, 'pointerout', event => { if (!event.relatedTarget) { hoveredWord = null; paintCornerHover(); } }, true);
-    listen(document, 'click', onSubmitClick, true);
-    listen(document, 'keydown', onKey, true);
+    listen(window,'pointerdown',event => {
+      const button = event.target.closest?.('button,[role="button"],[data-margin-submit]');
+      staged = null;
+      if (event.button !== 0 || !button || button.closest(OWN_UI) || button.disabled || button.getAttribute('aria-disabled') === 'true') return;
+      if (button.matches('[data-margin-submit]') || /^submit$/i.test(clean(button.textContent))) {
+        staged = {button,time:Date.now(),snapshot:snapshotSubmission()};
+        if (staged.snapshot.words.length === 4) suspendMarks();
+      }
+    },true);
+    listen(window, 'click', onSubmitClick, true);
+    listen(window, 'keydown', onKey, true);
     listen(window, 'resize', geometry);
     listen(window, 'scroll', geometry, true);
     const feedbackObserver = new MutationObserver(records => {
-      if (!pending) return;
       const changedWithin = selectors => records.some(record => {
         const target = record.target.nodeType === Node.ELEMENT_NODE ? record.target : record.target.parentElement;
         if (target?.closest(OWN_UI)) return false;
         return target?.closest(selectors) || Array.from(record.addedNodes).some(node =>
           node.nodeType === Node.ELEMENT_NODE && (node.matches(selectors) || node.querySelector(selectors)));
       });
+      const boardChanged = changedWithin(TILE_SELECTORS.join(',')+', [data-testid="connections-board"], [data-margin-game="connections"], [class*="Board-module_board"], [class*="SolvedCategory-module"]');
+      if (moving && boardChanged) suspendMarks();
+      if (!pending) return;
       const feedbackChanged = changedWithin(FEEDBACK_SELECTORS);
-      if (feedbackChanged || changedWithin(MISTAKE_SELECTORS)) {
+      if (feedbackChanged || boardChanged || changedWithin(MISTAKE_SELECTORS)) {
         if (feedbackChanged) pending.observedFeedbackMutation = true;
         captureFeedback();
       }
     });
-    feedbackObserver.observe(document.body, { childList: true, subtree: true, characterData: true });
+    feedbackObserver.observe(document.body, { childList: true, subtree: true, characterData: true, attributes:true, attributeFilter:['class','style','aria-checked','aria-pressed','data-selected'] });
     renderHistory(); refresh();
     if (migrated) ctx.save();
     return { refresh, settingsChanged: refresh, destroy() {
       destroyed = true;
-      clearTimeout(deadline); clearTimeout(pending?.lossTimer);
+      clearTimeout(deadline); clearTimeout(pending?.lossTimer); clearTimeout(motionTimer);
       feedbackObserver.disconnect(); listeners.forEach(remove => remove());
-      closePopup(); overlay.remove(); popupHost.remove(); toolbar.remove();undoButton.remove();
+      closePopup(); clearMarkers(); popupHost.remove(); toolbar.remove();undoButton.remove();
       if(actionRow)actionRow.style.flexWrap=actionWrap;
     } };
   }

@@ -38,7 +38,11 @@
   const originalOpen = window.open, lookups = [];
   window.open = (...args) => { lookups.push(args); return null; };
   const adapter = MarginGames.connections.mount({ panel, el, state, inline, feature: name => features[name] !== false, shadowMode: 'open', save: () => saves++, notice: () => {}, settings: {}, isPreview: true });
-  const handles = () => document.querySelector('#margin-connections-overlay').shadowRoot;
+  const markerHosts = () => [...document.querySelectorAll('[data-margin-overlay="connections"]')];
+  const handles = () => ({
+    querySelectorAll: selector => markerHosts().flatMap(host => [...host.shadowRoot.querySelectorAll(selector)]),
+    querySelector: selector => handles().querySelectorAll(selector)[0] || null,
+  });
   const handle = (word, corner) => handles().querySelector(`[data-word="${word}"][data-corner="${corner}"]`);
   const toolbar = () => slots.get('connections-tools').container;
   const control = text => [...toolbar().querySelectorAll('button')].find(node => node.textContent === text || node.getAttribute('aria-label') === text);
@@ -89,7 +93,30 @@
     assert(state.marks.BASS.tl === 0 && nativeClicks === 1 && nativePointers === 1, 'Top-left corner marks yellow without selecting the native word');
     for (const corner of ['tr', 'bl', 'br']) handle('BASS', corner).click();
     assert(JSON.stringify(state.marks.BASS) === JSON.stringify({ tl: 0, tr: 1, bl: 2, br: 3 }), 'The four corners always map to yellow, green, blue, and purple');
+    const undoSlot = slots.get('connections-undo').container, clearAll = undoSlot.querySelector('[aria-label="Clear all marks"]');
+    assert(clearAll && clearAll.previousElementSibling.textContent === 'Undo mark','Clear marks sits directly beside Undo mark');
+    const beforeClearAll = JSON.stringify(state.marks), labelsBeforeClear = JSON.stringify(state.labels), attemptsBeforeClear = JSON.stringify(state.attempts);
+    clearAll.click();
+    assert(Object.keys(state.marks).length === 0 && clearAll.disabled,'Clear marks removes every color and disables itself');
+    clearAll.previousElementSibling.click();
+    assert(JSON.stringify(state.marks) === beforeClearAll && JSON.stringify(state.labels) === labelsBeforeClear && JSON.stringify(state.attempts) === attemptsBeforeClear,'Undo restores cleared marks without changing category names or guess history');
     assert([...handles().querySelectorAll('.corner-handle')].every(node => node.textContent.trim() === ''), 'Tile corner marks contain no A–D text');
+    const markedTile = board.firstElementChild, stableCorner = handle('BASS','br');
+    assert(stableCorner.getRootNode().host.parentElement === markedTile, 'Corners are anchored inside their native tile');
+    board.style.transform = 'translate(.5px,.25px)';
+    for (const scale of [1,.98,.86,1]) {
+      markedTile.style.transform = `scale(${scale})`;adapter.refresh();
+      const bounds = markedTile.getBoundingClientRect();
+      for (const position of ['tl','tr','bl','br']) {
+        const corner = handle('BASS',position).getBoundingClientRect();
+        const x = position.endsWith('r') ? Math.abs(corner.right-bounds.right) : Math.abs(corner.left-bounds.left);
+        const y = position.startsWith('b') ? Math.abs(corner.bottom-bounds.bottom) : Math.abs(corner.top-bounds.top);
+        assert(x < .05 && y < .05, `Corner ${position} stays aligned during native scale ${scale} at fractional coordinates`);
+      }
+      assert(handle('BASS','br') === stableCorner, `Native scale ${scale} never rebuilds or snaps the corner control`);
+    }
+    markedTile.style.removeProperty('transform');board.style.removeProperty('transform');adapter.refresh();
+
     assert(getComputedStyle(handle('BASS','tl'), '::before').clipPath.startsWith('polygon(') && getComputedStyle(handle('BASS','tl')).borderRadius === '0px', 'Corner marks render as colored triangles');
     handle('BASS', 'br').click();
     assert(state.marks.BASS.br === undefined && state.marks.BASS.bl === 2, 'Clicking the same corner again clears just that mark');
@@ -127,11 +154,11 @@
     assert(state.labels[0] === 'N'.repeat(60), 'Saving enforces the category name bound even for programmatic input');
     const nativeBeforeFilter = nativeClicks; group(1).click(); board.children[1].click(); group(1).click();
     assert(nativeClicks === nativeBeforeFilter + 1, 'Filtering never converts center clicks into marking');
-    const leftBefore = handle('BASS', 'tl').style.left;
+    const leftBefore = handle('BASS', 'tl').getBoundingClientRect().left;
     board.append(board.firstElementChild); adapter.refresh();
-    assert(handle('BASS', 'tl').style.left !== leftBefore && state.marks.BASS.br === 3, 'Direct corner controls follow the same word after native shuffle');
+    assert(handle('BASS', 'tl').getBoundingClientRect().left !== leftBefore && state.marks.BASS.br === 3, 'Direct corner controls follow the same word after native shuffle');
     features.cornerLabels = false; adapter.refresh();
-    assert(document.querySelector('#margin-connections-overlay').hidden && Object.keys(state.marks.BASS).length === 4, 'Disabling corner labels hides controls without discarding saved marks');
+    assert(markerHosts().length === 0 && Object.keys(state.marks.BASS).length === 4, 'Disabling corner labels hides controls without discarding saved marks');
     features.cornerLabels = true; adapter.refresh();
     const sameToolbar = toolbar(); adapter.refresh(); adapter.refresh();
     assert(toolbar() === sameToolbar && document.querySelectorAll('[data-margin-inline]').length === 2, 'Repeated refreshes reuse the toolbar and action slot without duplicates');
@@ -168,7 +195,7 @@
     }
     assert([...toolbar().querySelectorAll('.connection-group')].every(n=>n.hidden)&&toolbar().querySelector('.connection-swatches').hidden&&handles().querySelectorAll('button').length===0,'All four native solved colors remove their controls without leaving blank top categories');
     features.cornerLabels = false; adapter.refresh();
-    assert(document.querySelector('#margin-connections-overlay').hidden && toolbar().querySelector('.connection-swatches').hidden, 'The corner preference hides its palette and overlay');
+    assert(markerHosts().length === 0 && toolbar().querySelector('.connection-swatches').hidden, 'The corner preference hides its palette and overlay');
     features.difficulty = false; adapter.refresh();
     assert(toolbar().querySelector('.connection-inline-difficulty').hidden && !control('Previous tries').hidden, 'History remains available when labels and difficulty are disabled');
     features.attemptHistory = false; adapter.refresh();
@@ -177,7 +204,7 @@
     assert(control('Previous tries').hidden && tries().hidden && state.attempts.length === 1, 'Disabling history hides its action and stops new capture');
     assert(document.querySelector('#margin-host').closest('details').querySelector('summary').getBoundingClientRect().height>0, 'Settings stays reachable with every optional feature disabled');
     features.cornerLabels = true; features.difficulty = true; features.attemptHistory = true; adapter.refresh();
-    assert(!document.querySelector('#margin-connections-overlay').hidden && !control('Previous tries').hidden && state.attempts.length === 1 && [...toolbar().querySelectorAll('.connection-group')].every(n=>n.hidden)&&Object.keys(state.marks).length===0, 'Re-enabling features preserves solved cleanup and previous tries');
+    assert(markerHosts().length === 0 && !control('Previous tries').hidden && state.attempts.length === 1 && [...toolbar().querySelectorAll('.connection-group')].every(n=>n.hidden)&&Object.keys(state.marks).length===0, 'Re-enabling features preserves solved cleanup and previous tries');
     const lookupTile = board.firstElementChild, beforeLookup = nativeClicks;
     const altDown = new PointerEvent('pointerdown', { bubbles: true, altKey: true, cancelable: true, button: 0 }); lookupTile.dispatchEvent(altDown);
     lookupTile.dispatchEvent(new MouseEvent('click', { bubbles: true, altKey: true, cancelable: true }));
@@ -188,7 +215,7 @@
     assert(!Object.hasOwn(state,'solvedColors'),'Solved display flags are not saved into shared extension storage');
     assert(saves > 0, 'Category edits and attempt history persist locally');
     adapter.destroy(); window.open = originalOpen;
-    assert(!document.querySelector('#margin-connections-overlay,[data-margin-overlay="connections-popups"]'), 'Destroy removes corner controls and popup surfaces');
+    assert(!document.querySelector('[data-margin-overlay="connections"],[data-margin-overlay="connections-popups"]'), 'Destroy removes corner controls and popup surfaces');
     document.querySelector('#results').textContent = `${results.join('\n')}\nALL ${results.length} TESTS PASSED`;
     document.body.dataset.testStatus = 'passed'; document.documentElement.dataset.testResult = 'passed';
   } catch (error) {

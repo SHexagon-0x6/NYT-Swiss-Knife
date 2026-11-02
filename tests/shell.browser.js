@@ -13,7 +13,10 @@
   const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
   const assert = (condition, message) => { if (!condition) throw new Error(message); };
   const slot = name => document.querySelector(`[data-margin-inline="${name}"]`);
-  const overlay = () => document.querySelector('#margin-connections-overlay')?.shadowRoot;
+  const overlay = () => ({
+    querySelectorAll: selector => [...document.querySelectorAll('[data-margin-overlay="connections"]')].flatMap(host => [...host.shadowRoot.querySelectorAll(selector)]),
+    querySelector: selector => overlay().querySelectorAll(selector)[0] || null,
+  });
   const settings = () => shadow.querySelector('.game-settings');
   const button = text => Array.from(shadow.querySelectorAll('button')).find(node => node.textContent === text);
   function nativeToolbar(settingsAvailable=false){
@@ -122,7 +125,7 @@
       assert(shadow.querySelector('[data-feature="clickToEdit"]'), 'route did not switch');
       assert(document.querySelector('#margin-host').style.display==='none','A duplicate Wordle settings gear is visible');
       assert(!slot('connections-tools'), 'old inline controls leaked');
-      assert(!document.querySelector('#margin-connections-overlay'), 'old overlay leaked');
+      assert(!document.querySelector('[data-margin-overlay="connections"]'), 'old overlay leaked');
       const features = [...shadow.querySelectorAll('[data-feature]')].map(node => node.dataset.feature);
       assert(features.length === 2 && features.includes('letterProtection') && features.includes('clickToEdit'), 'Wordle should have exactly two preferences');
       assert(!slot('wordle-letters') && !shadow.querySelector('.mw-workbench'), 'removed Wordle workbench remains');
@@ -178,11 +181,11 @@
       assert(Math.abs(triggerRect.top + triggerRect.height / 2 - hintRect.top - hintRect.height / 2) < 3 && Math.min(Math.abs(triggerRect.left - hintRect.right), Math.abs(triggerRect.right - hintRect.left)) < 16, 'Strands gear is not next to the native hint');
       assert(grid.children.length===48,'tools changed letter grid');
     });
-    await run('Crossword settings contain exactly clue hover and letter cycling', async () => {
+    await run('Crossword settings contain letter cycling and Notes', async () => {
       await storage.set('settings', { disabled: [] });
       route('crossword', '&puzzle=first'); fixtures.replaceChildren(); await wait(1750);
       const features = [...shadow.querySelectorAll('[data-feature]')].map(node => node.dataset.feature).sort();
-      assert(features.join(',') === 'clueHover,letterCycle', 'Crossword has extra feature settings');
+      assert(features.join(',') === 'candidateNotes,letterCycle', 'Crossword feature settings do not match its tools');
       assert(shadow.querySelector('.notes').hidden && !shadow.querySelector('.mc-notebook'), 'Crossword notes remain exposed');
       assert(!shadow.querySelector('.shortcut-setting').hidden&&shadow.querySelector('.shortcut-key'),'Crossword configurable Pencil hotkey is missing');
       const toggle = shadow.querySelector('[data-feature="letterCycle"]'); toggle.click(); await wait(30);

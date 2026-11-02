@@ -20,6 +20,7 @@ jobs:
       - run: npm test
       - run: npm run check
       - run: npm run test:browser -- --no-sandbox
+      - run: npm run test:stats
       - run: npm run package:publish
       - run: npm run verify:package
       - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2

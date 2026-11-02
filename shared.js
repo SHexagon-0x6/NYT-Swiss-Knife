@@ -42,6 +42,25 @@
     const date = new Date();
     return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`;
   }
+  function puzzleDate(game) {
+    const valid = value => globalThis.MarginStats.validDate(value);
+    const path = location.pathname.match(/\/(20\d{2})\/(\d{2})\/(\d{2})(?:\/|$)/);
+    const archive = path && valid(path.slice(1).join('-')) ? path.slice(1).join('-') : null;
+    const selectors = game === 'crossword-daily' ? '.xwd__details--date' : '.pz-game-date,.pz-game-header__date,.pz-game-title-bar__date,[data-testid="game-date"]';
+    for (const node of document.querySelectorAll(selectors)) {
+      if (node.closest('[hidden],[aria-hidden="true"]') || !node.getClientRects().length || getComputedStyle(node).visibility === 'hidden') continue;
+      const text = node.textContent.trim(), iso = text.match(/20\d{2}-\d{2}-\d{2}/)?.[0];
+      if (valid(iso)) return archive && archive !== iso ? null : iso;
+      const printed = text.match(/\b(?:January|February|March|April|May|June|July|August|September|October|November|December)\s+\d{1,2},?\s+20\d{2}\b/)?.[0];
+      if (!printed) continue;
+      const parsed = new Date(printed);
+      if (Number.isFinite(+parsed)) {
+        const date = `${parsed.getFullYear()}-${String(parsed.getMonth()+1).padStart(2,'0')}-${String(parsed.getDate()).padStart(2,'0')}`;
+        return archive && archive !== date ? null : date;
+      }
+    }
+    return archive;
+  }
   function gameForPath(path) {
     if (/^\/games\/bonus\/crossword\//.test(path)) return 'crossword';
     if (/connections(?:\/|$)/.test(path)) return 'connections';
@@ -85,5 +104,5 @@
     for(const [name,handler] of events)window.addEventListener(name,handler,true);
     return()=>{reset();for(const [name,handler] of events)window.removeEventListener(name,handler,true);};
   }
-  window.Margin = {el, storage, GAMES, localDate, gameForPath, extension, bindShortcut, shortcutLabel};
+  window.Margin = {el, storage, GAMES, localDate, puzzleDate, gameForPath, extension, bindShortcut, shortcutLabel};
 })();

@@ -36,6 +36,7 @@ jobs:
           node scripts/release-notes.cjs > "$RUNNER_TEMP/release-notes.md"
       - run: npm test
       - run: npm run test:browser -- --no-sandbox
+      - run: npm run test:stats
       - run: npm run package:publish
       - run: npm run verify:package
       - name: Commit version and publish release

@@ -40,7 +40,11 @@
   const notices = [];
   let adapter = window.MarginGames.connections.mount({ el, panel, state, save: () => saves++, settings: {}, notice: message => notices.push(message), isPreview: true });
   const popupRoot = () => document.querySelector('[data-margin-overlay="connections-popups"]').shadowRoot;
-  const handles = () => document.querySelector('#margin-connections-overlay').shadowRoot;
+  const markerHosts = () => [...document.querySelectorAll('[data-margin-overlay="connections"]')];
+  const handles = () => ({
+    querySelectorAll: selector => markerHosts().flatMap(host => [...host.shadowRoot.querySelectorAll(selector)]),
+    querySelector: selector => handles().querySelectorAll(selector)[0] || null,
+  });
   const handle = (word, corner) => handles().querySelector(`[data-word="${word}"][data-corner="${corner}"]`);
   const clickPanel = text => {
     const button = [...panel.querySelectorAll('button'), ...popupRoot().querySelectorAll('button')].find(node => node.textContent === text || node.getAttribute('aria-label') === text);
@@ -61,9 +65,9 @@
     handle('BASS','br').click();
     assert(state.marks.BASS.tl === 0 && state.marks.BASS.br === 3, 'A word can carry independent fixed-color corner ideas');
     assert(handle('BASS','tl').textContent === '' && handle('BASS','br').textContent === '', 'Saved corner marks have no letter overlays');
-    const before = handle('BASS','tl').style.left;
+    const before = handle('BASS','tl').getBoundingClientRect().left;
     board.append(board.firstElementChild); adapter.refresh();
-    assert(handle('BASS','tl').style.left !== before, 'Labels follow the word after shuffle');
+    assert(handle('BASS','tl').getBoundingClientRect().left !== before, 'Labels follow the word after shuffle');
     handle('BASS','br').click();
     assert(state.marks.BASS.br === undefined && state.marks.BASS.tl === 0, 'Repeating a corner click removes just that corner');
     clickPanel('Undo mark');
@@ -105,12 +109,12 @@
       label.append(input, el('span', { className: 'Card-module_reference__fixture', textContent: String(index + 1) }), el('span', { textContent: word }));
       return label;
     }));
-    adapter.refresh();
+    await new Promise(resolve => setTimeout(resolve,300));adapter.refresh();
     assert(handles().querySelectorAll('button.corner-handle').length === 64, 'Detects the NYT label-and-checkbox board shape');
     handle('BASS','tr').click();
     assert(state.marks.BASS.tr === 1 && !state.marks['1BASS'], 'Saves the visible word without its keyboard-reference span');
     assert(!board.firstElementChild.querySelector('input').checked, 'A corner click does not toggle the underlying native checkbox');
-    for (const [index, label] of [...board.children].entries()) label.querySelector('input').checked = index < 4;
+    for (const [index, label] of [...board.children].entries()) {label.querySelector('input').checked = index < 4;label.classList.toggle('Card-module_selected__fixture',index < 4);}
     clickPanel('Previous tries');
     assert(!popupRoot().querySelector('.connection-history').querySelector('select,input,.connection-popup-actions')&&popupRoot().querySelector('.connection-history').querySelectorAll('button').length===1,'Tries has only recorded guesses and its close button');
     clickPanel('Close previous tries');
@@ -131,11 +135,51 @@
     const afterOneAway = state.attempts.length;
     await new Promise(resolve => setTimeout(resolve, 850));
     assert(state.attempts.length === afterOneAway, 'Lost-dot timer cannot double-record an explicit feedback result');
+    // A native handler may clear selection before the result or mistake animation ends.
+    const submit = document.querySelector('[data-margin-submit]');
+    document.querySelector('[data-margin-feedback]').textContent = '';await pause();
+    const beforeFast = state.attempts.length, beforeSave = saves;
+    submit.addEventListener('click', () => {
+      for (const label of board.children) {label.querySelector('input').checked = false;label.classList.remove('Card-module_selected__fixture');}
+      document.querySelector('[data-margin-mistakes]').lastElementChild.remove();
+    }, {once:true});
+    submit.dispatchEvent(new PointerEvent('pointerdown',{button:0,bubbles:true}));submit.click();
+    assert(state.attempts.length === beforeFast+1 && saves > beforeSave && state.attempts.at(-1).words.length === 4, 'Persists the first submission before native handlers clear the selection');
+    assert(markerHosts().length === 0 && !handle('BASS','tl'), 'Corner triangles are actually unpainted immediately on submission');
+    for (const [index,label] of [...board.children].entries()) {label.classList.toggle('Card-module_selected__fixture',index >= 4 && index < 8);label.querySelector('input').checked = index < 3 || index >= 5 && index < 8;}
+    submit.click();
+    assert(state.attempts.length === beforeFast+2 && state.attempts[beforeFast].result === 'incorrect', 'A fast second submission preserves the first wrong attempt while its feedback is settling');
+    const solvedRow = el('div',{'data-testid':'solved-category'}, ...words.slice(4,8).map(word => el('span',{'data-solved-word':'',textContent:word})));
+    board.after(solvedRow);
+    const animation = board.lastElementChild.animate([{transform:'translateY(0)'},{transform:'translateY(30px)'}],{duration:1500});
+    await pause();
+    assert(state.attempts.at(-1).result === 'correct' && state.attempts.at(-1).words.join(',') === 'BANK,STREAM,BED,MOUTH', 'The correct attempt uses visible selection despite stale checked and unchecked inputs, then matches the solved group');
+    await new Promise(resolve => setTimeout(resolve, 300));
+    assert(markerHosts().length === 0 && !handle('BASS','tl'), 'No corner triangles are painted while native tile motion runs');
+    animation.finish();await new Promise(resolve => setTimeout(resolve, 300));
+    assert(markerHosts().length > 0 && handle('BASS','tl').getClientRects().length > 0 && state.marks.BASS.tl === 0, 'Corners return after motion settles without losing saved marks');
+    // Native selection also animates: only Submit may hide the flags.
+    for (const type of ['animationstart','animationend','transitionrun','transitionend']) {
+      board.firstElementChild.dispatchEvent(new Event(type,{bubbles:true}));
+      assert(markerHosts().length > 0 && handle('BASS','tl').getClientRects().length > 0, 'Tile selection keeps flags visible during '+type);
+    }
+    document.querySelector('[data-test-shuffle]').dispatchEvent(new PointerEvent('pointerdown',{button:0,bubbles:true}));
+    document.querySelector('[data-test-shuffle]').click();
+    assert(markerHosts().length > 0 && handle('BASS','tl').getClientRects().length > 0, 'Shuffle does not trigger the Submit-only hiding behavior');
+    solvedRow.remove();
+    const afterFast = state.attempts.length;
+    for (const [index,label] of [...board.children].entries()) {label.querySelector('input').checked = index < 4;label.classList.toggle('Card-module_selected__fixture',index < 4);}
+    const textInput = el('input',{type:'text'});document.body.append(textInput);
+    textInput.dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));textInput.remove();
+    assert(state.attempts.length === afterFast, 'Enter in an unrelated text field does not record a guess');
+    board.firstElementChild.querySelector('input').dispatchEvent(new KeyboardEvent('keydown',{key:'Enter',bubbles:true}));submit.click();
+    assert(state.attempts.length === afterFast+1, 'Enter from a focused native tile records once, including a follow-up click');
+    document.querySelector('[data-margin-feedback]').textContent = 'Not quite';await pause();
     const beforeSolved=state.attempts.length;document.querySelector('[data-margin-feedback]').textContent='';
     document.querySelector('[data-margin-submit]').click();const solved=[...board.children].slice(0,4);solved.forEach(node=>node.remove());adapter.refresh();
     assert(state.attempts.length===beforeSolved+1&&state.attempts.at(-1).words.join(',')==='BASS,PITCH,TONE,NOTE','The log also records a submitted group removed from the visible board');
     clickPanel('Previous tries');assert(popupRoot().querySelectorAll('.connection-one-away').length===state.attempts.filter(a=>a.result==='one-away').length,'Only observed one-away attempts receive a badge');clickPanel('Close previous tries');
-    board.prepend(...solved);adapter.refresh();
+    board.prepend(...solved);document.querySelector('[data-margin-feedback]').textContent='Not quite';await new Promise(resolve => setTimeout(resolve,300));adapter.refresh();
     state.marks = Object.fromEntries(Array.from({ length: 64 }, (_, index) => [index === 0 ? 'BASS' : `SAVED${index}`, { tl: 0 }]));
     adapter.refresh();
     handle('PITCH','tl').click();
@@ -173,7 +217,7 @@
     assert(panel.querySelector('.connection-inline-difficulty').textContent==='Difficulty unavailable'&&panel.querySelector('.connection-inline-difficulty').getAttribute('aria-busy')==='false','Only a finished failed request changes loading to unavailable');
     delete window.MarginConnectionsRating;
     adapter.destroy();
-    assert(!document.querySelector('#margin-connections-overlay,[data-margin-overlay="connections-popups"]'), 'Destroy removes the annotation and popup surfaces');
+    assert(!document.querySelector('[data-margin-overlay="connections"],[data-margin-overlay="connections-popups"]'), 'Destroy removes the annotation and popup surfaces');
     document.querySelector('#test-results').textContent = `${results.join('\n')}\nALL ${results.length} TESTS PASSED`;
     document.documentElement.dataset.testResult = 'passed';
   } catch (error) {

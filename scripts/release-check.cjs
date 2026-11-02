@@ -3,6 +3,7 @@ const fs=require('node:fs');
 const {execFileSync}=require('node:child_process');
 const manifest=require('../manifest.json'),pkg=require('../package.json');
 if(manifest.version!==pkg.version)throw Error('Manifest and package versions differ');
+if(/preview/i.test(manifest.version_name||''))throw Error('This is a local preview. Complete release validation and remove version_name before publishing.');
 const tag='v'+manifest.version;
 if(process.env.GITHUB_EVENT_NAME==='push'&&process.env.GITHUB_REF_NAME!==tag)throw Error('Release tag must match manifest version '+tag);
 if(process.env.GITHUB_EVENT_NAME==='workflow_dispatch'){

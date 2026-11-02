@@ -23,13 +23,13 @@
     board = el('div', { className: 'grid', 'data-margin-game': 'crossword' });
     cells = Array.from({ length: 9 }, (_, index) => {
       const cell = el('div', { className: 'cell', tabIndex: 0, 'data-margin-crossword-cell': '', 'data-row': String(Math.floor(index / 3)), 'data-col': String(index % 3), 'data-number': String(index + 1), 'data-block': 'false', 'aria-selected': String(index === 1) },
-        el('span', { className: 'number', textContent: String(index + 1) }), el('span', { className: 'crossword-letter', 'data-margin-crossword-value': '', textContent: index === 1 ? config.initial || '' : '' }));
+        el('span', { className: 'number', textContent: String(index + 1) }), el('span', { className: 'crossword-letter', 'data-margin-crossword-value': '', textContent: index === 1 ? config.initial || '' : config.filled ? 'X' : '' }));
       cell.addEventListener('click', () => { if (!options.ignoreSelection) options.selectionDelay ? later(() => select(index), options.selectionDelay) : select(index); });
       return cell;
     });
     board.append(...cells); fixture.append(board);
     const legacy = { scratch: 'Saved note', crossword: { entries: [{ id: 'old', ref: '1 Across', pattern: '?A?', note: 'Keep this note', confidence: 'pencil' }], draft: { ref: '2 Down', pattern: '?B?', note: 'Saved draft', confidence: 'ink' } } };
-    const features = { clueHover: false, letterCycle: true, ...(config.features || {}) };
+    const features = { clueHover: false, letterCycle: true, candidateNotes: false, ...(config.features || {}) };
     ctx = { el, panel, state: legacy, settings: {}, isPreview: true, shadowMode: 'open', saves: 0, save() { ctx.saves++; }, notice(message) { ctx.noticeText = message; }, feature(name, fallback = true) { return features[name] ?? fallback; }, features };
     adapter = MarginGames.crossword.mount(ctx);
   }
@@ -56,6 +56,7 @@
     if (!/^[a-z]$/i.test(event.key) || event.ctrlKey || event.metaKey || event.altKey || event.target.closest?.('input,textarea,[contenteditable]')) return;
     const index = selected, targetIndex = cells.indexOf(event.target.closest?.('[data-margin-crossword-cell]'));
     const value = event.key.toUpperCase();
+    if (options.solved) return;
     if (options.preventKeydown && event.type === 'keydown') event.preventDefault();
     writes.push({ index, targetIndex, value, time: Date.now(), type: event.type, charCode: event.charCode, which: event.which, keyCode: event.keyCode });
     if (options.ignoreWrite) return;
@@ -66,7 +67,33 @@
         valueNode(index).replaceChildren(hidden, document.createTextNode(value));
       } else valueNode(index).textContent = value;
       if (options.autoAdvance) select((index + 1) % cells.length);
-      if (options.completeAt === value) fixture.append(el('div', { role: 'dialog', 'aria-label': 'Puzzle complete', textContent: 'Congratulations!' }));
+      if (options.completeAt === value) {
+        options.solved = true;
+        const complete = () => fixture.append(el('div', { role: 'dialog', 'aria-label': 'Puzzle complete', textContent: 'Congratulations!' }));
+        options.completeDelay ? later(complete, options.completeDelay) : complete();
+      }
+      else if (options.incorrectResults) {
+        let modal = options.reuseDialog && options.resultModal;
+        if (!modal) {
+          modal = el('div',{role:'dialog',className:'xwd__modal--content'},el('h2',{textContent:options.incorrectTitle || 'Not quite!'}),el('p',{textContent:options.incorrectText || 'At least one square is wrong.'}));
+          if (options.nativeResult) {
+            const article = el('article',{className:'xwd__modal--content'},...modal.childNodes);
+            modal.className = 'modal-system-container';modal.setAttribute('aria-modal','true');
+            modal.append(el('div',{className:'xwd__modal--body xwd__rats-modal animate-opening',tabIndex:0},el('button',{'aria-label':'close',textContent:'×'}),article));
+          }
+          const button = el('button',{textContent:options.incorrectButton || 'OK',onClick:() => {
+            options.dismissed = (options.dismissed || 0)+1;
+            if (options.disableWhileClosing) button.disabled = true;
+            const close = () => {if (options.reuseDialog) modal.hidden = true;else modal.remove();};
+            options.dismissDelay ? later(close,options.dismissDelay) : close();
+          }});
+          if (options.nativeResult) modal.querySelector('article').append(el('div',{className:'xwd__modal--button-container'},button));
+          else modal.append(button);
+          fixture.append(modal);options.resultModal = modal;
+        }
+        modal.hidden = false;modal.querySelector('button').disabled = false;
+        if (options.nativeResult) modal.querySelector('.xwd__modal--body').focus({preventScroll:true});
+      }
     };
     options.writeDelay ? later(commit, options.writeDelay) : commit();
   }
@@ -84,7 +111,7 @@
     setup(); toggle().click(); await until(() => writes.length === 3, 'three letters were not tried', 2600); toggle().click();
     assert(writes.map(write => write.value).join('') === 'ABC' && writes.every(write => write.index === 1 && write.targetIndex === 1), 'native auto-advance moved cycling into another square');
     assert(cells.every((_, index) => index === 1 || !letter(index)), 'a neighboring square was overwritten');
-    assert(writes.slice(1).every((write, index) => write.time - writes[index].time >= 650), 'letters were sent too quickly to inspect');
+    assert(writes.at(-1).time-writes[0].time < 200, 'fixed delay still makes the trials slow');
     assert(releases.join('') === 'ABC' && submissions === 0, 'letters lacked native releases or synthesized a submit');
   });
   await run('native asynchronous selection and letter renders settle before continuing', async () => {
@@ -103,7 +130,7 @@
     await until(() => writes.length === 1, 'initial letter event was not sent'); toggle().click();
     await wait(160);
     assert(letter(1) === 'A' && host().dataset.state === 'paused' && toggle().getAttribute('aria-label') === 'Resume A–Z', 'delayed auto-advance discarded the paused target');
-    toggle().click(); await until(() => writes.length === 2, 'paused delayed trial did not resume'); await wait(120); toggle().click();
+    toggle().click(); await until(() => writes.length === 2, 'paused delayed trial did not resume'); toggle().click(); await wait(120);
     assert(writes[1].value === 'B' && writes.every(write => write.index === 1) && letter(1) === 'B' && cells.every((_, index) => index === 1 || !letter(index)), 'resume restarted A or wrote to an auto-advanced neighbor');
   });
   await run('an already-present candidate does not misread delayed auto-advance as a manual selection', async () => {
@@ -144,7 +171,7 @@
   await run('Stop ends the sequence and a new explicit start restarts at A', async () => {
     setup(); toggle().click(); await until(() => writes.length === 1, 'A was not typed'); stop().click(); await wait(850);
     assert(writes.length === 1 && toggle().getAttribute('aria-label') === 'Try A–Z', 'stop left the sequence active');
-    select(1); adapter.refresh(); toggle().click(); await until(() => writes.length === 2, 'new start did not type');
+    cells[2].click(); adapter.refresh(); toggle().click(); await until(() => writes.length === 2, 'new start did not type');
     assert(writes[1].value === 'A', 'new sequence did not restart at A');
   });
   await run('selecting a different square pauses cycling until an explicit new start', async () => {
@@ -190,6 +217,28 @@
     setup({ completeAt: 'B' }); toggle().click(); await until(() => fixture.querySelector('[role="dialog"]'), 'native completion modal did not appear'); await wait(850);
     assert(writes.map(write => write.value).join('') === 'AB' && submissions === 0 && host().dataset.state !== 'running', 'completion kept typing or fabricated submission');
   });
+  await run('last-square trials dismiss only incorrect-result dialogs and continue until success', async () => {
+    setup({filled:true,incorrectResults:true,completeAt:'C',dismissDelay:80});toggle().click();
+    await until(() => fixture.textContent.includes('Congratulations!'),'successful result did not appear',3500);await wait(800);
+    assert(writes.map(write => write.value).join('') === 'ABC' && options.dismissed === 2,'incorrect results did not continue exactly once per letter');
+    assert(host().dataset.state !== 'running' && fixture.textContent.includes('Congratulations!') && submissions === 0,'successful completion was dismissed or input continued');
+  });
+  await run('an incorrect-result dialog on an unfinished grid is not automatically dismissed', async () => {
+    setup({incorrectResults:true});toggle().click();await until(() => fixture.querySelector('[role="dialog"]'),'result did not appear');await wait(800);
+    assert(writes.length === 1 && !options.dismissed && host().dataset.state !== 'running','an unrelated result dialog was dismissed');
+  });
+  for (const [title,button] of [['Almost there.','OK'],['So close.','Keep trying'],['Nearly.','Continue']]) await run(`native “${title}” results continue with ${button}, including reused dialogs`, async () => {
+    setup({filled:true,incorrectResults:true,completeAt:'D',incorrectTitle:title,incorrectText:'The puzzle is filled, but at least one square’s amiss. Confound it.',incorrectButton:button,reuseDialog:true,dismissDelay:80,disableWhileClosing:true});
+    toggle().click();await until(() => fixture.textContent.includes('Congratulations!'),'success did not appear',4500);await wait(800);
+    assert(writes.map(write => write.value).join('') === 'ABCD' && options.dismissed === 3,'a result was skipped, dismissed twice, or left blocking the loop');
+    assert(host().dataset.state !== 'running','cycling continued after success');
+  });
+  for (const title of ['Almost there.','Just about.']) await run(`native nested “${title}” dialog with focus and closing animation resumes A–Z`, async () => {
+    setup({filled:true,incorrectResults:true,completeAt:'C',nativeResult:true,incorrectTitle:title,incorrectText:'The puzzle is filled, but at least one square’s amiss. Horsefeathers.',incorrectButton:'Keep trying',dismissDelay:200});
+    toggle().click();await until(() => fixture.textContent.includes('Congratulations!'),'success did not appear',3500);await wait(800);
+    assert(writes.map(write => write.value).join('') === 'ABC' && options.dismissed === 2,'native focus or dialog nesting stopped cycling');
+    assert(host().dataset.state !== 'running' && submissions === 0,'success was dismissed or typing continued');
+  });
   await run('navigation and a removed target never continue an old cycle', async () => {
     setup(); toggle().click(); await until(() => writes.length === 1, 'A was not typed');
     const url = location.href; history.replaceState(null, '', `${location.pathname}?different-puzzle=1`); adapter.refresh(); await wait(850); history.replaceState(null, '', url);
@@ -204,9 +253,15 @@
     assert(writes.length === 1, 'missing render acknowledgement allowed repeated native writes');
   });
   await run('cycling stops after Z and never wraps or auto-submits', async () => {
-    setup(); toggle().click(); await until(() => writes.length === 26, 'cycle did not finish A–Z', 20000); await wait(850);
+    setup(); toggle().click(); await until(() => writes.length === 26, 'cycle did not finish A–Z', 1500); await wait(850);
     assert(writes.map(write => write.value).join('') === 'ABCDEFGHIJKLMNOPQRSTUVWXYZ' && writes.every(write => write.index === 1), 'cycle skipped, repeated, or moved letters');
     assert(host().dataset.state === 'done' && toggle().getAttribute('aria-label') === 'Try A–Z' && submissions === 0, 'Z did not finish cleanly');
+    assert(writes.at(-1).time-writes[0].time < 1000, 'accepted trials did not finish in under a second');
+  });
+  await run('fast trials preserve a correct letter while congratulations loads', async () => {
+    setup({ filled:true, completeAt:'C', completeDelay:1000 }); toggle().click();
+    await until(() => fixture.textContent.includes('Congratulations!'), 'delayed completion did not appear');
+    assert(letter(1)==='C' && writes.map(write=>write.value).join('')==='ABC' && host().dataset.state!=='running' && !ctx.noticeText, 'a slow result screen overwrote the accepted solution or showed a false error');
   });
   await run('destroy cancels future native edits and removes the cycle control', async () => {
     setup(); toggle().click(); await until(() => writes.length === 1, 'A was not typed'); adapter.destroy(); adapter = null; await wait(850);

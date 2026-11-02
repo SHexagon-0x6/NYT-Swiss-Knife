@@ -27,9 +27,15 @@
     await until(() => images.every(img => img.complete && img.naturalWidth > 0), 'Local game SVG icons failed to load');
     const iconBase = new URL('../icons/games/', location.href).href;
     assert(images.every(img => img.src.startsWith(iconBase) && /\.(svg|png)$/.test(img.src) && img.alt === ''), 'Game icons load from bundled image files without network assets');
-    const links = [...doc.querySelectorAll('a')];
-    assert(links.length === 1 && links[0].textContent === 'How to use' && new URL(links[0].href).pathname.endsWith('/help.html'), 'Popup contains only the How to use link without a logo credit line');
-    assert(!doc.querySelector('button,textarea,select,#export,#delete,#notes') && !/Saved notes|Export|Delete|Open game|little room|maybes/i.test(doc.body.textContent), 'Popup has no notes management, game links, or extra descriptive copy');
+    const links = [...doc.querySelectorAll('a')], toggle = doc.getElementById('stats-toggle');
+    assert(links.some(a => a.textContent === 'How to use') && toggle?.tagName === 'SUMMARY' && !doc.querySelector('#stats-section input[role="switch"]') && !doc.querySelector('header button,header input'), 'Calendar & stats uses a disclosure row below the static title and logo');
+    assert(win.getComputedStyle(doc.body).width === '300px' && win.getComputedStyle(doc.querySelector('h1')).fontSize === '19px' && rows.every(row => row.getBoundingClientRect().height >= 60), 'Popup restores the released width, heading size and game spacing');
+    assert(!doc.querySelector('.header-hint') && !doc.body.textContent.includes('Tools & daily stats') && !doc.body.textContent.includes('History has no age limit'), 'Popup omits the extra subtitle and storage explanation');
+    const section = doc.getElementById('stats-section');
+    assert(!section.open && !doc.querySelector('#stats-panel a'), 'Calendar begins collapsed without duplicate Help or Privacy links');
+    toggle.click();assert(section.open && rows.every(row => row.getClientRects().length) && !doc.querySelector('#games').closest('details'), 'The disclosure expands the calendar while keeping every game control visible');
+    assert(!doc.querySelector('.day.today,.day[aria-current="date"]'), 'The main popup calendar has no puzzle-date dot');
+    toggle.click();assert(!section.open && rows.every(row => row.getClientRects().length), 'Collapsing the calendar leaves the original game list open');
     assert(!input('strands').checked && input('wordle').checked && input('connections').getAttribute('aria-label') === 'Enable Connections tools', 'Enable switches reflect saved preferences and have accessible names');
 
     const storage = win.Margin.storage, realGet = storage.get.bind(storage), realSet = storage.set.bind(storage);

@@ -5,7 +5,7 @@
 <div id="fixture"></div><div id="margin-host"></div><pre id="results"></pre>
 <script src="../games/sudoku.js"></script><script src="../games/strands.js"></script>
 <script>
-(() => {
+(async () => {
   const output = document.querySelector('#results'), fixture = document.querySelector('#fixture'), host = document.querySelector('#margin-host'), shadow = host.attachShadow({mode:'open'});
   const el = (tag,attrs={},...children) => { const node=document.createElement(tag); for(const [key,value] of Object.entries(attrs)){if(key.startsWith('on'))node.addEventListener(key.slice(2).toLowerCase(),value);else if(key==='className')node.className=value;else if(key==='textContent')node.textContent=value;else node.setAttribute(key,value)}for(const child of children)node.append(child);return node; };
   let checks=0, saves=0;
@@ -25,6 +25,16 @@
     check(ctx.state.sudokuNotes[1].corner.join('')==='13','Corner notes toggle from keyboard');
     button('Center').click();key('2');key('4');
     check(ctx.state.sudokuNotes[1].center.join('')==='24'&&ctx.state.sudokuNotes[1].corner.join('')==='13','Center and corner notes coexist');
+    const noteLayer=document.querySelector('[data-margin-overlay="sudoku"]');
+    check(noteLayer.parentElement===fixture&&noteLayer.style.position==='absolute'&&getComputedStyle(fixture).isolation==='isolate','Sudoku notes are contained in the board stacking context');
+    const savedPencils=JSON.stringify(ctx.state.sudokuNotes);
+    for(const name of ['Pause','Help','Settings']){
+      const dialog=el('div',{role:'dialog',style:'position:fixed;inset:20px;background:white;z-index:3',textContent:name});
+      document.body.append(dialog);await Promise.resolve();
+      check(getComputedStyle(noteLayer).visibility==='hidden',name+' hides both Snyder and Center marks before rendering over the dialog');
+      dialog.remove();await Promise.resolve();
+      check(getComputedStyle(noteLayer).visibility==='visible'&&JSON.stringify(ctx.state.sudokuNotes)===savedPencils,name+' restores the saved notes after closing');
+    }
     const beforeBulk=JSON.stringify(ctx.state.sudokuNotes);
     button('Erase all Center').click();check(ctx.state.sudokuNotes[1].center.length===0&&ctx.state.sudokuNotes[1].corner.join('')==='13','Erase all Center preserves Snyder');
     button('Undo').click();check(JSON.stringify(ctx.state.sudokuNotes)===beforeBulk,'One Undo restores an entire mode erase');

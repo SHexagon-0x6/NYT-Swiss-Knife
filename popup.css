@@ -4,3 +4,8 @@ footer{display:flex;align-items:center;justify-content:space-between;gap:8px}foo
 
 header{display:flex;align-items:center;gap:9px}.brand-icon{object-fit:contain;flex:0 0 36px}h1{font-size:19px}
 
+
+#stats-section{border-bottom:1px solid #e5e5e5}
+#stats-toggle{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:15px 0;cursor:pointer;font-weight:500;list-style:none}
+#stats-toggle::-webkit-details-marker{display:none}#stats-toggle::after{content:'';width:7px;height:7px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:rotate(45deg);margin-right:3px;margin-bottom:4px}#stats-section[open]>#stats-toggle::after{transform:rotate(225deg);margin-bottom:0}
+#stats-panel{padding:0 0 16px}#stats-status{font-size:11px;color:#777;margin:8px 0}#stats-status:empty{display:none}[hidden]{display:none!important}

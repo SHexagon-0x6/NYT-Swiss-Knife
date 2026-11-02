@@ -43,11 +43,74 @@ test('malformed markup, excessive depth and excessive tokens are bounded and rej
   assert.equal(parseArticle(article('<p><span hidden>2.3 out of 5</span></p>'), 1238), null);
   assert.equal(parseArticle(article('<p><span style="visibility:hidden">2.3 out of 5</span></p>'), 1238), null);
 });
-test('off, non-NYT, non-Connections, ambiguous links and unknown archives never fetch', async () => {
+test('off, non-NYT, non-Connections, missing daily links and invalid archive dates never fetch', async () => {
   let calls = 0; const fetch = async () => { calls++; return response(); };
   assert.equal((await createReader(env({ fetch })).read({ enabled: false, date: DATE })).status, 'disabled');
-  for (const context of [env({ fetch, location: { origin: 'https://evil.test', pathname: '/games/connections' } }), env({ fetch, location: { origin: 'https://www.nytimes.com', pathname: '/games/wordle/index.html' } }), env({ fetch, document: { querySelectorAll: () => [] } }), env({ fetch, location: { origin: 'https://www.nytimes.com', pathname: '/games/connections/2026-10-31' }, document: { querySelectorAll: selector => selector.startsWith('a[') ? [node(LINK)] : [] } })]) assert.equal((await createReader(context).read({ enabled: true, date: DATE })).status, 'no-link');
+  for (const context of [env({ fetch, location: { origin: 'https://evil.test', pathname: '/games/connections' } }), env({ fetch, location: { origin: 'https://www.nytimes.com', pathname: '/games/wordle/index.html' } }), env({ fetch, document: { querySelectorAll: () => [] } }), ...['2026-02-30', '2023-06-11'].map(date => env({ fetch, location: { origin: 'https://www.nytimes.com', pathname: `/games/connections/${date}` }, document: { querySelectorAll: () => [] } }))]) assert.equal((await createReader(context).read({ enabled: true, date: DATE })).status, 'no-link');
   assert.equal(calls, 0);
+});
+const ARCHIVE_LINK = 'https://www.nytimes.com/2026/10/05/crosswords/connections-companion-1213.html';
+const archiveEnv = overrides => env({ location: { origin: 'https://www.nytimes.com', pathname: '/games/connections/2026-10-06' }, ...overrides });
+const archiveArticle = article().replace('1,238', '1,213');
+test('October 6 archive uses its own date and number when the footer links to today', async () => {
+  for (const headings of [[], [node(null, 'No. 1213')]]) {
+    const calls = [];
+    const reader = createReader(archiveEnv({
+      document: { querySelectorAll: selector => selector.startsWith('a[') ? [node(LINK)] : headings },
+      fetch: async (url, options) => { calls.push(url); assert.equal(options.credentials, 'omit'); return response(archiveArticle, { url }); }
+    }));
+    const result = await reader.read({ enabled: true, date: DATE });
+    assert.deepEqual(result, { status: 'ok', rating: 2.3, url: ARCHIVE_LINK, articleDate: '2026-10-05' });
+    await reader.read({ enabled: true });
+    assert.deepEqual(calls, [ARCHIVE_LINK]);
+  }
+});
+test('an archive without a visible Companion link tries at most the two publication dates', async () => {
+  for (const available of [true, false]) {
+    const calls = [], sameDay = ARCHIVE_LINK.replace('/10/05/', '/10/06/');
+    const reader = createReader(archiveEnv({ document: { querySelectorAll: () => [] }, fetch: async url => {
+      calls.push(url); return response(archiveArticle, { url, status: available && url === sameDay ? 200 : 404 });
+    } }));
+    const results = await Promise.all([reader.read({ enabled: true }), reader.read({ enabled: true })]);
+    assert.equal(results[0].status, available ? 'ok' : 'unavailable');
+    assert.equal(results[0].rating, available ? 2.3 : null);
+    await reader.read({ enabled: true });
+    assert.deepEqual(calls, [ARCHIVE_LINK, sameDay]);
+  }
+});
+test('an archive prefers its visible matching Companion link', async () => {
+  const sameDay = ARCHIVE_LINK.replace('/10/05/', '/10/06/'), calls = [];
+  const reader = createReader(archiveEnv({
+    document: { querySelectorAll: selector => selector.startsWith('a[') ? [node(sameDay), node(LINK)] : [] },
+    fetch: async url => { calls.push(url); return response(archiveArticle, { url }); }
+  }));
+  assert.equal((await reader.read({ enabled: true })).rating, 2.3);
+  assert.deepEqual(calls, [sameDay]);
+});
+test('archive numbers stay correct across leap days and daylight-saving changes', async () => {
+  for (const [date, number] of [['2023-06-12', 1], ['2024-02-29', 263], ['2024-03-01', 264], ['2026-03-08', 1001], ['2026-03-09', 1002], ['2026-11-01', 1239]]) {
+    const reader = createReader(archiveEnv({ location: { origin: 'https://www.nytimes.com', pathname: `/games/connections/${date}` }, document: { querySelectorAll: () => [] }, fetch: async url => {
+      assert(url.endsWith(`connections-companion-${number}.html`));
+      return response(article().replace('1,238', String(number)), { url });
+    } }));
+    assert.equal((await reader.read({ enabled: true })).rating, 2.3);
+  }
+});
+test('conflicting visible puzzle numbers and ambiguous matching links never fetch', async () => {
+  let calls = 0;
+  const fetch = async () => { calls++; return response(); };
+  for (const nodes of [[node(null, 'No. 1214')], [node(null, 'No. 1213'), node(null, 'No. 1214')]]) {
+    const reader = createReader(archiveEnv({ fetch, document: { querySelectorAll: selector => selector.startsWith('a[') ? [node(ARCHIVE_LINK)] : nodes } }));
+    assert.equal((await reader.read({ enabled: true })).status, 'no-link');
+  }
+  const reader = createReader(archiveEnv({ fetch, document: { querySelectorAll: selector => selector.startsWith('a[') ? [node(ARCHIVE_LINK), node(ARCHIVE_LINK.replace('/10/05/', '/10/06/'))] : [] } }));
+  assert.equal((await reader.read({ enabled: true })).status, 'no-link');
+  assert.equal(calls, 0);
+});
+test('archive fallback rejects an article with another puzzle number', async () => {
+  const reader = createReader(archiveEnv({ document: { querySelectorAll: () => [] }, fetch: async url => response(article(), { url }) }));
+  const result = await reader.read({ enabled: true });
+  assert.equal(result.status, 'unavailable'); assert.equal(result.rating, null);
 });
 test('request omits credentials, refuses redirects, stays same-origin and caches concurrent results', async () => {
   let calls = 0;

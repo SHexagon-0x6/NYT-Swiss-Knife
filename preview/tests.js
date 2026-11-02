@@ -109,12 +109,12 @@
       const before = doc.querySelector('[data-margin-crossword-cell][aria-selected="true"]'); key('ArrowDown', doc.activeElement); await wait(25);
       assert(doc.querySelector('[data-margin-crossword-cell][aria-selected="true"]') !== before, `${game}: arrow navigation moves the active square`);
       cells[6].focus();const hoverRect=cells[6].getBoundingClientRect();cells[6].dispatchEvent(new doc.defaultView.PointerEvent('pointermove',{bubbles:true,clientX:hoverRect.x+8,clientY:hoverRect.y+8}));await wait(30);
-      assert(doc.querySelector('#margin-crossword-tooltip')?.hidden === false && /Across/.test(doc.querySelector('#margin-crossword-tooltip').shadowRoot.textContent) && /Down/.test(doc.querySelector('#margin-crossword-tooltip').shadowRoot.textContent), `${game}: hover/focus repeats both existing intersecting clues`);
+      assert(!doc.querySelector('#margin-crossword-tooltip'), `${game}: hover and focus do not show clue previews`);
       const featureNames = [...doc.querySelector('#margin-host').shadowRoot.querySelectorAll('[data-feature]')].map(node => node.dataset.feature).sort();
-      assert(featureNames.join(',') === 'clueHover,letterCycle' && !find('.mc-notebook'), `${game}: exactly two settings remain and the notebook is removed`);
+      assert(featureNames.join(',') === 'candidateNotes,letterCycle' && !find('.mc-notebook'), `${game}: fast trials and Notes are the only Crossword settings`);
       cells[1].click(); await wait(30); const neighbors = cells.map(node => node.querySelector('.crossword-letter')?.textContent || '');
-      button('Try A–Z').click(); await wait(820); button('Pause A–Z').click();
-      assert(cells[1].querySelector('.crossword-letter').textContent === 'B' && cells.every((node,index) => index === 1 || (node.querySelector('.crossword-letter')?.textContent || '') === neighbors[index]), `${game}: A–Z returns to the same square after native auto-advance`);
+      button('Try A–Z').click(); await wait(45); button('Pause A–Z').click();
+      assert(/^[B-Z]$/.test(cells[1].querySelector('.crossword-letter').textContent) && cells.every((node,index) => index === 1 || (node.querySelector('.crossword-letter')?.textContent || '') === neighbors[index]), `${game}: A–Z returns to the same square after native auto-advance`);
       assert(button('Resume A–Z'), `${game}: letter trials can be paused explicitly`); button('Stop A–Z').click();
       const clue = doc.querySelector('[data-margin-clue-direction="down"] button'); clue.click();
       assert(/Down/.test(doc.querySelector('.native-active-clue').textContent), `${game}: clicking a clue changes the active entry`);
