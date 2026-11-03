@@ -8,7 +8,7 @@ Simple tools to make your NYT gameplay better
 | Sudoku | Colored candidate: a second, italic candidate color (blue by default) with its own hotkey. Works with Auto candidate. |
 | Crossword | Fast A–Z trials, Notes for candidate letters with erase/undo/clear, and configurable shortcuts. |
 | Wordle | Warn about conflicting letters and edit any active tile. |
-| Stats & calendar | Hard Sudoku and Daily Crossword times, speed colors, overall averages, daily edits, Chrome sync and JSON export. |
+| Stats & calendar | Hard Sudoku times, speed colors, overall averages, daily edits, Chrome sync and JSON export. |
 
 [Privacy policy](PRIVACY.md) · [Download releases](https://github.com/SHexagon-0x6/NYT-Swiss-Knife/releases)
 
