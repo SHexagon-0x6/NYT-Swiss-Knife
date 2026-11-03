@@ -164,6 +164,8 @@ async function dispatch(message, sender) {
     const state = await read();
     const resetAt = Math.max(Date.now(), state.data.resetAt+1);
     await chrome.storage.local.set({[DATA]:S.normalize({resetAt,records:{}}),[CAPTURED]:{resetAt,records:{}}});
+    // The popup's Done status is part of your play history too.
+    await chrome.storage.local.remove(Object.keys(await chrome.storage.local.get(null)).filter(key => key.startsWith('daily:')));
     // The reset marker prevents offline devices restoring deleted history on reconnect.
     return reconcile();
   }

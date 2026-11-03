@@ -9,3 +9,18 @@ header{display:flex;align-items:center;gap:9px}.brand-icon{object-fit:contain;fl
 #stats-toggle{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:15px 0;cursor:pointer;font-weight:500;list-style:none}
 #stats-toggle::-webkit-details-marker{display:none}#stats-toggle::after{content:'';width:7px;height:7px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:rotate(45deg);margin-right:3px;margin-bottom:4px}#stats-section[open]>#stats-toggle::after{transform:rotate(225deg);margin-bottom:0}
 #stats-panel{padding:0 0 16px}#stats-status{font-size:11px;color:#777;margin:8px 0}#stats-status:empty{display:none}[hidden]{display:none!important}
+
+.game-text{flex:1;min-width:0;display:flex;flex-direction:column;gap:1px}
+.game-link{display:inline-flex;align-items:center;gap:5px;align-self:flex-start;color:inherit;text-decoration:none;border-radius:3px}
+.game-link:hover .game-name{text-decoration:underline;text-underline-offset:3px}
+.link-icon{width:12px;height:12px;flex:0 0 12px;fill:none;stroke:#777;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.game-link:hover .link-icon{stroke:#121212}
+.game-status{font-size:11px;line-height:1.35;color:#777}.game-status.done{color:#21663b}.game-status.done::before{content:'\2713\00a0'}
+.game-status.new::before{content:'';display:inline-block;width:6px;height:6px;margin:0 5px 1px 0;border-radius:50%;background:#4b83b4;vertical-align:middle}
+.games-empty{font-size:12px;color:#777;margin:12px 0}
+.status-undo{margin-left:4px;padding:0;border:0;background:none;color:#121212;font:inherit;font-weight:600;text-decoration:underline;text-underline-offset:2px;cursor:pointer}
+.archive{border-top:1px solid #eee}
+#archived .game{min-height:52px;padding:8px 0}
+.footer-links{display:flex;align-items:center;gap:14px}
+.footer-link{padding:0;border:0;background:none;color:#555;font:inherit;cursor:pointer}
+.footer-link:hover,.footer-link[aria-expanded=true]{text-decoration:underline;text-underline-offset:3px}

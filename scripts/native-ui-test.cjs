@@ -44,7 +44,7 @@ async function settings(game){
   console.log(JSON.stringify({game,indent}));assert(Math.abs(indent.own-indent.native)<1&&indent.ownFont===indent.nativeFont,game+' extension preferences align with native settings indentation and font');
  }
  if(['sudoku','crossword'].includes(game)){
-  const choices=game==='sudoku'?[['corner','F8'],['center','F9'],['play','F10']]:[['','F8']];
+  const choices=game==='sudoku'?[['colored','F8']]:[['','F8']];
   for(const [mode,hotkey]of choices){
    const selector=mode?'[data-shortcut-mode="'+mode+'"] .shortcut-key':'.shortcut-key';
    await ownClick('#margin-host',selector);await key(hotkey,hotkey);
@@ -106,18 +106,14 @@ const deadline=setTimeout(()=>{console.error('Native browser test deadline');chr
     assert(await inside('[data-margin-overlay="connections"]',`function(){return !this.querySelector('.empty.revealed')&&this.querySelector('[aria-pressed="true"]')&&this.querySelector('button').getBoundingClientRect().width>24}`),'Connections larger corners keep saved marks while clearing hover shades after a click and exit');
    }
    if(game==='sudoku'){
-    const identity=await evaluate(`(()=>{const n=document.querySelector('[data-margin-inline="sudoku-candidates"] input');return{exists:!!n,checked:n?.checked,top:n?.getBoundingClientRect().top,boardTop:document.querySelector('.su-board')?.getBoundingClientRect().top}})()`);
-    assert(identity.exists&&identity.top<identity.boardTop,'Sudoku retains the original candidate checkbox in its top toolbar');
-    await nativeClick('[data-margin-inline="sudoku-candidates"] input');assert(await evaluate(`document.querySelector('[data-margin-inline="sudoku-candidates"] input').checked`)!==identity.checked,'Sudoku original candidate checkbox toggles normally');await nativeClick('[data-margin-inline="sudoku-candidates"] input');
-    await nativeClick('.su-board .su-cell');
-    assert(await evaluate(`parseFloat(getComputedStyle(document.querySelector('[data-margin-inline="sudoku-candidates"] label')).fontSize)>=14`),'Sudoku Auto candidate text matches the scale of top controls');
-    await key('F8','F8');assert(await inside('[data-margin-inline="sudoku-pencil"]',`function(){return this.querySelector('.sudoku-modes [aria-pressed="true"]').textContent==='Snyder'}`),'Sudoku configured hotkey enters Snyder');
-    const index=await evaluate(`(()=>{const cells=[...document.querySelectorAll('.su-board .su-cell')];const i=cells.findIndex(n=>{const r=n.getBoundingClientRect(),hit=document.elementFromPoint(r.x+r.width/2,r.y+r.height/2);return !n.querySelector('.su-cell__value')&&!!r.width&&(n===hit||n.contains(hit))});if(i>=0)cells[i].setAttribute('data-native-test-empty','');return i})()`);assert(index>=0,'Sudoku has an editable square for mark testing');await nativeClick('[data-native-test-empty]');await key('1');await key('F8','F8');assert(await inside('[data-margin-inline="sudoku-pencil"]',`function(){return this.querySelector('.sudoku-modes [aria-pressed="true"]').textContent==='Snyder'}`),'Sudoku repeated key stays in the selected mode');await key('F9','F9');await key('2');
-    assert(await inside('[data-margin-inline="sudoku-pencil"]',`function(){return this.querySelector('[aria-label="Undo marks"]').hidden&&this.querySelector('[aria-label="Erase selected marks"]').hidden}`),'Sudoku removes duplicate Undo and erase buttons above the keypad');
-    const state=(await send('Extensions.getStorageItems',{id:loaded.id,storageArea:'local'})).data;const record=Object.values(state).find(n=>n?.game==='sudoku');
-    assert(record?.state.sudokuNotes[index]?.corner?.includes(1)&&record.state.sudokuNotes[index]?.center?.includes(2),'Sudoku saves independent Snyder and Center through native keyboard input');
-    await evaluate(`(()=>{const n=[...document.querySelectorAll('button.su-keyboard__undo')].find(n=>n.getClientRects().length);n?.setAttribute('data-native-test-undo','')})()`);await nativeClick('[data-native-test-undo]');await nativeClick('[data-native-test-undo]');
-    const after=(await send('Extensions.getStorageItems',{id:loaded.id,storageArea:'local'})).data;assert(!Object.values(after).find(n=>n?.game==='sudoku')?.state.sudokuNotes[index],'Sudoku always-available Undo restores both modes');await key('F10','F10');assert(await inside('[data-margin-inline="sudoku-pencil"]',`function(){return this.querySelector('.sudoku-modes [aria-pressed="true"]').textContent==='Play'}`),'Sudoku Play shortcut restores normal entry');
+    const placement=await evaluate(`(()=>{const auto=document.querySelector('label.su-keyboard__auto'),row=document.querySelector('[data-margin-inline="sudoku-colored"]');return{auto:!!auto?.closest('.su-keyboard__container'),next:auto?.nextElementSibling===row,font:auto?getComputedStyle(auto).fontFamily:''}})()`);
+    assert(placement.auto&&placement.next,'Sudoku keeps Auto candidate in place with Colored candidate right below it');
+    const ownFont=await inside('[data-margin-inline="sudoku-colored"]',`function(){return getComputedStyle(this.querySelector('.colored-row')).fontFamily}`);
+    assert(ownFont===placement.font,'Colored candidate uses the same font as Auto candidate');
+    await nativeClick('.su-board .su-cell');await key('F8','F8');await wait(250);
+    assert(await inside('[data-margin-inline="sudoku-colored"]',`function(){return this.querySelector('input').checked}`)&&await evaluate(`document.querySelector('[data-testid="candidate-mode"]').getAttribute('aria-pressed')==='true'`),'Sudoku configured hotkey turns on Colored candidate');
+    await key('F8','F8');await wait(250);
+    assert(!await inside('[data-margin-inline="sudoku-colored"]',`function(){return this.querySelector('input').checked}`)&&await evaluate(`document.querySelector('[data-testid="candidate-mode"]').getAttribute('aria-pressed')==='true'`),'Sudoku hotkey turns Colored candidate off and keeps Candidate');
    }
    if(game==='crossword'){
     const pencil=await evaluate(`document.querySelector('button[aria-label="Pencil"]').innerHTML`);await key('F8','F8');const changed=await evaluate(`document.querySelector('button[aria-label="Pencil"]').innerHTML`);assert(pencil!==changed,'Crossword custom hotkey toggles native Pencil');await key('F8','F8');

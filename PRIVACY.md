@@ -12,13 +12,19 @@ Stats contain the game type, puzzle date, duration, totals, counts and revision 
 
 Captured times, recording choices, previous saved times and displayed puzzle dates are cached locally to support corrections and calendar display. These caches are not synced. Deleting a date or clearing history removes the related capture information.
 
+### Done status in the popup
+
+To show **Done** or **New puzzle ready** for each game, the extension saves one date per game: the latest puzzle date you finished in this browser. It is read only from what the game page shows, such as a finished board, a completion message or the game’s “Great job on today’s puzzle” start screen. Any Sudoku difficulty and any crossword count; monthly Bonus crosswords do not. A newer date replaces the older one, so no list of past days is kept. Done status is not recorded in Incognito or for games you have turned off, and it is not synced.
+
+The popup compares that date with the publisher’s usual release schedule on your device. It does not contact The New York Times or any other server and does not read your NYT account, so a puzzle finished in the NYT app or another browser shows **New puzzle ready** until you open it here.
+
 Puzzle paths, identifiers, dates and timestamps associate records with the correct puzzle. Shortcuts are processed locally; unrelated browsing and general keystroke histories are not stored. The extension does not request your name, email, passwords, payment details or location, or read account cookies or hidden puzzle answers.
 
 ## Storage and deletion
 
 Preferences and annotations are stored in chrome.storage.local. These include annotations, Crossword candidate letters, category labels, observed attempts and retained records from older versions. Notes, marks, guesses and ordinary tool preferences are not synced.
 
-Puzzle annotations are removed after 90 days without an update, during cleanup when the extension is used. Preferences remain until you change them or uninstall the extension. Disabling a game does not delete its records. Uninstalling removes local extension storage.
+Puzzle annotations are removed after 90 days without an update, during cleanup when the extension is used. Preferences remain until you change them or uninstall the extension. Done status remains until a newer puzzle replaces it or you select Clear history. Disabling a game does not delete its records. Uninstalling removes local extension storage.
 
 Completion stats do not expire; local copies remain until deleted or the extension is uninstalled. Data & sync lets you export JSON, control automatic recording and synchronization, and clear history. Stats use displayed or manually entered times. The extension does not reconstruct historical results from your NYT account or distinguish assisted from unassisted solves.
 
@@ -40,7 +46,7 @@ The publisher does not receive or inspect saved puzzle records or stats. The ext
 
 When Connections Daily difficulty is enabled, the extension requests the relevant public NYT Companion article using the game’s link or the archived puzzle’s date and number. Requests omit account credentials and referrers. Saved marks and guess history are not sent. Only the numeric rating and source metadata are cached temporarily in memory; article hints and solutions are not displayed or saved. You can disable this feature in Settings.
 
-Wordle edits, Sudoku Auto Candidate changes and Crossword A–Z trials use the game’s native controls. Crossword trials begin only when you start them. The game website’s own requests and privacy practices apply separately.
+Wordle edits, Connections Submit groups, Sudoku Colored candidate mode changes and Crossword A–Z trials use the game’s native controls. Submit groups and Crossword trials begin only when you start them. Each group sent by Submit groups is an ordinary guess, recorded by the game as if you had submitted it yourself. The game website’s own requests and privacy practices apply separately.
 
 Opening this policy on GitHub or following other external links is subject to those websites’ privacy practices.
 

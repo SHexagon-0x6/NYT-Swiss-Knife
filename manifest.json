@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "NYT Games Swiss Knife",
-  "version": "0.7.6",
+  "version": "0.7.7",
   "description": "Simple tools to make your NYT gameplay better",
   "minimum_chrome_version": "116",
   "permissions": [
@@ -34,6 +34,7 @@
         "stats-calendar.js",
         "stats-widget.js",
         "stats-capture.js",
+        "daily-status.js",
         "games/connections-rating.js",
         "games/connections.js",
         "games/sudoku.js",

@@ -15,13 +15,13 @@
   }
   document.getElementById('game-title').textContent = bonus ? 'Bonus crossword' : GAMES[game].name;
   document.getElementById('game-description').textContent = {
-    connections: 'Category marks and previous tries.', sudoku: 'Snyder and Center.',
+    connections: 'Category marks and previous tries.', sudoku: 'Colored candidate for any marks you want to stand out.',
     wordle: 'Spot clue conflicts. Change a letter with a click.',
     crossword: bonus ? 'An original 5 × 5 mini. No subscription needed.' : 'An original practice grid, with both clues close by.',
   }[game];
   document.getElementById('test-instructions').textContent = {
     connections: 'Click a corner to toggle its fixed color: yellow, green, blue or purple. Click a category icon to filter, its × to clear that color, or double-click to rename. Open Tries above the board for your submitted groups. Click word centers to select them; feedback is simulated.',
-    sudoku: 'Click an empty cell and type 1–9 in Play to enter a number. Delete erases it. Switch to Snyder or Center and use those same keys to add independent marks. Arrow keys move through the grid in Play.',
+    sudoku: 'Click an empty cell and type 1–9 to enter a number. Choose Candidate to toggle candidates. Turn on Colored candidate below Auto candidate (or press B) and every candidate you enter or tap turns blue. The eye hides colored candidates. Arrow keys move through the grid.',
     wordle: 'Two example rows provide visible feedback. Type STARE to see conflicting letters turn red, then press Enter to review the warning. Click any tile in your current row to type or delete a letter. Open the game’s Settings to turn either feature on or off. New row colors are sample feedback, not an answer check.',
     crossword: 'Click a square and type. Arrow keys move; Space changes Across/Down; Backspace erases; Tab moves to the next clue. Click a clue to select its entry. Hover any white square for both existing clues. No answers or checking are included.',
   }[game];
@@ -75,46 +75,8 @@
         grid.replaceChildren(...nodes);
       } }), el('button', { className: 'action', type: 'button', textContent: 'Deselect all', onClick: () => { selected.clear(); grid.querySelectorAll('button').forEach(node => node.setAttribute('aria-pressed','false')); } }), submit), feedback);
   } else if (game === 'sudoku') {
-    const grid = el('div', { className: 'sudoku-board su-board', role: 'grid', 'aria-label': 'Original Sudoku practice grid' });
-    const givens = '530070000600195000098000060800060003400803001700020006060000280000419005000080079';
-    const values = Array.isArray(saved.values) ? Array.from({ length: 81 }, (_, i) => /^[1-9]$/.test(saved.values[i]) ? saved.values[i] : '') : Array(81).fill('');
-    let active = 2, nativeCandidate = false;
-    const undo = [];
-    const cells = [];
-    function select(index, focus = false) { active = index; cells.forEach((cell, i) => { cell.classList.toggle('selected', i === active); cell.setAttribute('aria-selected', String(i === active)); cell.tabIndex = i === active ? 0 : -1; }); if (focus) cells[active].focus({ preventScroll: true }); }
-    function write(value) {
-      if (givens[active] !== '0') return;
-      const span = cells[active].querySelector('[data-margin-value]');
-      if (nativeCandidate && value) { const notes = cells[active].querySelector('.native-pencil'); const digits = new Set(notes.textContent); digits.has(value) ? digits.delete(value) : digits.add(value); notes.textContent = [...digits].sort().join(''); return; }
-      if (values[active] === value) return;
-      undo.push(values.slice()); if (undo.length > 40) undo.shift();
-      values[active] = value; span.textContent = value; persist({ values });
-    }
-    for (let i = 0; i < 81; i++) {
-      const given = givens[i] !== '0';
-      const cell = el('button', { type: 'button', className: 'su-cell', role: 'gridcell', 'data-margin-cell': String(i), 'data-given': String(given), 'aria-readonly': String(given), 'aria-label': `Row ${Math.floor(i / 9) + 1}, column ${i % 9 + 1}${given ? ', given '+givens[i] : ''}`, onClick: () => select(i) },
-        el('span', { 'data-margin-value': '', textContent: given ? givens[i] : values[i] }), el('span', { className: 'native-pencil' }));
-      cells.push(cell); grid.append(cell);
-    }
-    const normal = el('button', { type: 'button', 'data-testid': 'normal-mode', textContent: 'Normal', onClick: () => { nativeCandidate = false; } });
-    const candidate = el('button', { type: 'button', 'data-testid': 'candidate-mode', textContent: 'Candidate', onClick: () => { nativeCandidate = true; } });
-    const pad = el('div', { className: 'sudoku-keypad su-candidates', 'data-margin-sudoku-keypad': '' });
-    for (let n = 1; n <= 9; n++) pad.append(el('button', { type: 'button', className: 'su-candidate-button', 'data-margin-sudoku-digit': String(n), textContent: String(n), onClick: () => write(String(n)) }));
-    const erase = el('button', { type: 'button', className: 'action sudoku-erase', 'data-margin-sudoku-erase': '', 'data-testid': 'clear-cell', textContent: 'Erase', onClick: () => write('') });
-    const undoButton = el('button', { type: 'button', className: 'action su-keyboard__undo', 'data-testid': 'undo-desktop', textContent: 'Undo', onClick: () => {
-      const previous = undo.pop(); if (!previous) return;
-      values.splice(0, values.length, ...previous); cells.forEach((cell, index) => { if (givens[index] === '0') cell.querySelector('[data-margin-value]').textContent = values[index]; }); persist({ values });
-    } });
-    const auto = el('label', { className: 'su-keyboard__auto' }, el('input', { type: 'checkbox', className: 'su-keyboard__checkbox', name: 'lightenComplete', 'data-testid': 'sudoku-keyboard-checkbox', checked: false }), 'Auto Candidate Mode');
-    board.append(grid, el('div', { className: 'su-keyboard' }, el('div', { className: 'su-keyboard__split' }, normal, candidate), pad, el('div', { className: 'sudoku-extra-actions' }, undoButton, erase), auto));
-    document.getElementById('test-instructions').append(' The demo Auto Candidate switch only mirrors its setting; it never calculates possible digits.');
-    document.addEventListener('keydown', event => {
-      if (!nativeInput(event)) return;
-      if (/^[1-9]$/.test(event.key)) { event.preventDefault(); write(event.key); }
-      else if (event.key === 'Backspace' || event.key === 'Delete') { event.preventDefault(); write(''); }
-      else if (/^Arrow/.test(event.key)) { const offsets = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -9, ArrowDown: 9 }; const next = active + offsets[event.key]; if (next >= 0 && next < 81) { event.preventDefault(); select(next, true); } }
-    });
-    select(active);
+    window.MarginSudokuBoard.build(board, { saved, persist });
+    document.getElementById('test-instructions').append(' The demo Auto candidate only hides digits already used in the same row, column or box.');
   } else if (game === 'wordle') {
     const grid = el('div', { className: 'wordle-board' });
     const previous = ['CRANE','STOUT'];

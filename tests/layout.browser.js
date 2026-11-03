@@ -46,7 +46,7 @@
   let board, shadow, host;
   const cases = [
     { name: 'Connections', game: 'connections', flag: 'cornerLabels' },
-    { name: 'Sudoku', game: 'sudoku', flag: 'centerNotes' },
+    { name: 'Sudoku', game: 'sudoku', flag: 'coloredCandidates' },
     { name: 'Wordle', game: 'wordle', flag: 'letterProtection' },
     { name: 'Crossword', game: 'crossword', flag: 'candidateNotes' },
     { name: 'Bonus Crossword', game: 'bonuscrossword', flag: 'candidateNotes' }
@@ -136,7 +136,7 @@
     for (const key of Object.keys(before)) assert(Math.abs(before[key] - after[key]) < .6, `${label}: ${key} moved from ${before[key]} to ${after[key]}`);
   }
   async function loaded(game,previousMounts){
-    const preference=game==='wordle'?'clickToEdit':game==='connections'?'cornerLabels':actualGame(game)==='crossword'?'letterCycle':'cornerNotes';
+    const preference=game==='wordle'?'clickToEdit':game==='connections'?'cornerLabels':actualGame(game)==='crossword'?'letterCycle':'coloredCandidates';
     await until(()=>(mounts[actualGame(game)]||0)>previousMounts&&document.querySelector('#margin-host')?.shadowRoot?.querySelector(`[data-feature="${preference}"]`),`${game} did not mount`);
     host=document.querySelector('#margin-host');shadow=host.shadowRoot;
     await until(()=>[...document.querySelectorAll('[data-margin-inline]'),host].filter(n=>n.shadowRoot).every(node=>[...node.shadowRoot.querySelectorAll('link[rel="stylesheet"]')].every(link=>!!link.sheet)),'Stylesheets did not load');
@@ -169,8 +169,8 @@
       assert(settings().open&&mounts[game]===count,'Changing a feature closed settings or remounted the adapter');
       flag(item.flag).click();await wait(50);assert((await storage.get('settings')).features[game][item.flag]===true,'Preference did not persist');
       assert(!flag('scratchpad')&&notes().closest('.notes').hidden,'Removed notes remain visible');
-      if(game==='sudoku'||game==='crossword')assert((game==='sudoku'?!shadow.querySelector('.mode-shortcuts').hidden:!shadow.querySelector('.shortcut-setting').hidden)&&shadow.querySelector('.shortcut-key'),'Configurable key recording is missing');
-      if(game==='sudoku')assert(!flag('pencilUndo')&&!flag('pencilShortcut'),'Optional Undo or duplicate shortcut toggle remains');
+      if(game==='sudoku'||game==='crossword')assert((game==='sudoku'?!shadow.querySelector('[data-shortcut-mode="colored"]').hidden:!shadow.querySelector('.shortcut-setting').hidden)&&shadow.querySelector('.shortcut-key'),'Configurable key recording is missing');
+      if(game==='sudoku')assert(!flag('pencilUndo')&&!flag('pencilShortcut')&&!flag('cornerNotes')&&!flag('centerNotes'),'Removed Sudoku mark switches remain');
       Object.assign(baseline,geometry());await close();unchanged(baseline,'Close after feature change');
     });
     await run(`${item.name}: Escape closes the applicable settings and preserves scroll`,async()=>{

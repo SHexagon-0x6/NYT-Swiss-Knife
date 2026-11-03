@@ -59,19 +59,22 @@
       assert(!Object.keys(remaining).some(key => key.includes(':demo-connections-v2:')) && remaining['puzzle:wordle:unrelated-demo'].state.scratch === 'Keep me', 'Reset removes this demo only and preserves other puzzle notes');
     }
     {
-      const { win, doc, button, key, find } = await open('sudoku');
-      const cell = doc.querySelector('[data-margin-cell="2"]'); cell.click(); key('4', cell);
-      assert(cell.querySelector('[data-margin-value]').textContent === '4', 'Sudoku Play writes a native value');
-      doc.querySelector('[data-testid="undo-desktop"]').click();
-      assert(cell.querySelector('[data-margin-value]').textContent === '', 'Sudoku native Undo reverses a Play entry');
+      const { win, doc, key } = await open('sudoku');
+      const cell = doc.querySelector('.su-cell[data-cell="2"]'); cell.click(); key('4', cell);
+      assert(cell.querySelector('.su-cell__value')?.textContent === '4', 'Sudoku Normal writes a native value');
+      doc.querySelector('.su-keyboard__undo').click();
+      assert(!cell.querySelector('.su-cell__value'), 'Sudoku native Undo reverses an entry');
       key('5', cell); key('Backspace', cell);
-      assert(cell.querySelector('[data-margin-value]').textContent === '', 'Sudoku Play erase restores an empty cell');
-      button('Snyder').click(); cell.dispatchEvent(new win.PointerEvent('pointerdown', { bubbles: true, button: 0, cancelable: true })); cell.click(); key('3', doc);
-      assert(cell.querySelector('[data-margin-value]').textContent === '' && [...doc.querySelectorAll('[data-margin-overlay="sudoku"] text')].some(node => node.textContent === '3'), 'Sudoku Corner mode writes only a pencil mark');
-      const nativeAuto = doc.querySelector('label.su-keyboard__auto input[data-testid="sudoku-keyboard-checkbox"]');
-      assert(nativeAuto?.closest('[data-margin-inline="sudoku-candidates"]')&&nativeAuto.getBoundingClientRect().top<cell.getBoundingClientRect().top,'Sudoku keeps the original All candidates control in the top toolbar');
-      nativeAuto.click();const enabled=nativeAuto.checked;nativeAuto.click();
-      assert(enabled&&!nativeAuto.checked,'The original candidate control toggles normally in its new location');
+      assert(!cell.querySelector('.su-cell__value'), 'Sudoku erase restores an empty cell');
+      const auto = doc.querySelector('label.su-keyboard__auto'), coloredHost = doc.querySelector('[data-margin-inline="sudoku-colored"]');
+      assert(auto.parentElement.matches('.su-keyboard__container') && auto.nextElementSibling === coloredHost && !doc.querySelector('[data-margin-inline="sudoku-pencil"],[data-margin-overlay="sudoku"]'), 'Colored candidate sits right below the original Auto candidate, with no Snyder or Center tools');
+      const coloredBox = coloredHost.shadowRoot.querySelector('input[type="checkbox"]'); coloredBox.click();
+      assert(doc.querySelector('[data-testid="candidate-mode"]').getAttribute('aria-pressed') === 'true', 'Colored candidate switches the preview to Candidate');
+      key('3', cell); await wait(50);
+      const mark = doc.querySelector('.su-candidates.selected svg.su-candidate[data-candidate="3"]');
+      assert(mark?.hasAttribute('data-margin-colored') && win.getComputedStyle(mark.firstElementChild).fill === 'rgb(47, 111, 219)', 'A candidate entered with Blue on is blue');
+      coloredBox.click();
+      assert(doc.querySelector('[data-testid="candidate-mode"]').getAttribute('aria-pressed') === 'true', 'Turning Colored candidate off keeps Candidate mode');
 
     }
     {

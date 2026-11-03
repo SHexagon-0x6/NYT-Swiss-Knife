@@ -152,8 +152,9 @@ test('offline device history merges; reset markers keep deleted results deleted'
   const f = worker();await f.request('record',solve,f.tab);const offline = structuredClone(f.data.sync);
   const remote = {records:{'crossword-daily:2026-10-02':[1500,Date.now()]}};Object.assign(f.data.sync,S.pack(remote));
   await f.request('sync');assert.equal(Object.keys(f.data.local.statsLocalV1.records).length,2);
-  f.data.local['puzzle:keep'] = {notes:'retain'};
+  f.data.local['puzzle:keep'] = {notes:'retain'};f.data.local['daily:sudoku'] = '2026-10-01';f.data.local['daily:wordle'] = '2026-10-01';
   await f.request('clear');assert.deepEqual(f.data.local.statsLocalV1.records,{});const reset = f.data.sync[S.RESET];
+  assert(!Object.keys(f.data.local).some(key => key.startsWith('daily:')),'Clear history also removes the popup Done dates');
   assert.deepEqual(f.data.local.statsCapturedV1.records,{});
   Object.assign(f.data.sync,offline);f.data.sync[S.RESET] = reset;
   await f.request('sync');assert.deepEqual(f.data.local.statsLocalV1.records,{});assert.deepEqual(f.data.local['puzzle:keep'],{notes:'retain'});

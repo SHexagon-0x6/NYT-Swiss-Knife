@@ -2,9 +2,9 @@
   'use strict';
   const GAMES = {
     connections: {name: 'Connections', icon: 'icons/games/connections.svg', url: 'https://www.nytimes.com/games/connections'},
-    sudoku: {name: 'Sudoku', icon: 'icons/games/sudoku.svg', url: 'https://www.nytimes.com/puzzles/sudoku/easy'},
+    sudoku: {name: 'Sudoku', icon: 'icons/games/sudoku.svg', url: 'https://www.nytimes.com/puzzles/sudoku'},
     wordle: {name: 'Wordle', icon: 'icons/games/wordle.png', url: 'https://www.nytimes.com/games/wordle/index.html'},
-    crossword: {name: 'Crossword', icon: 'icons/games/crossword.svg', url: 'https://www.nytimes.com/crosswords/game/daily'}
+    crossword: {name: 'Crossword', icon: 'icons/games/crossword.svg', url: 'https://www.nytimes.com/crosswords'}
   };
   function el(tag, attrs = {}, ...children) {
     const node = document.createElement(tag);
@@ -77,7 +77,8 @@
     const modifiers=new Set(['Shift','Control','Alt','Meta']), held=new Set();
     let pending=null;
     const cancel=()=>{pending=null;},reset=()=>{cancel();held.clear();};
-    const blocked=event=>event.composedPath().some(node=>node?.nodeType===1&&(node.matches('input,textarea,select,[contenteditable="true"],[contenteditable=""],#margin-host,[data-margin-inline],[data-margin-overlay],dialog,[role="dialog"]')||node.isContentEditable));
+    // Checkboxes and radios take no typing, so a game's own checkbox keeps shortcuts working.
+    const blocked=event=>event.composedPath().some(node=>node?.nodeType===1&&(node.matches('input:not([type="checkbox"]):not([type="radio"]),textarea,select,[contenteditable="true"],[contenteditable=""],#margin-host,[data-margin-inline],[data-margin-overlay],dialog,[role="dialog"]')||node.isContentEditable));
     const normalized=()=>{const options=readOptions();return {...options,key:typeof options.key==='string'?options.key:'Shift'};};
     const same=(event,options)=>event.key.toLowerCase()===options.key.toLowerCase()&&(!options.code||options.code===event.code)&&
       ['ctrlKey','altKey','shiftKey','metaKey'].every(flag=>event.key===({ctrlKey:'Control',altKey:'Alt',shiftKey:'Shift',metaKey:'Meta'})[flag]||!!event[flag]===!!options[flag]);
@@ -102,5 +103,36 @@
     for(const [name,handler] of events)window.addEventListener(name,handler,true);
     return()=>{reset();for(const [name,handler] of events)window.removeEventListener(name,handler,true);};
   }
-  window.Margin = {el, storage, GAMES, localDate, puzzleDate, gameForPath, extension, bindShortcut, shortcutLabel};
+  // Daily release schedule. Wordle and Connections change at local midnight.
+  // Sudoku and crosswords publish the next puzzle the evening before, Eastern
+  // time: 10 p.m. Monday–Friday and 6 p.m. Saturday and Sunday.
+  const EASTERN_GAMES = new Set(['sudoku', 'crossword']);
+  const isoDay = (y, m, d) => `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+  function shiftDay(iso, days) {
+    const [y, m, d] = iso.split('-').map(Number), date = new Date(Date.UTC(y, m - 1, d + days));
+    return isoDay(date.getUTCFullYear(), date.getUTCMonth() + 1, date.getUTCDate());
+  }
+  function easternClock(now) {
+    const parts = Object.fromEntries(new Intl.DateTimeFormat('en-US', {timeZone: 'America/New_York', hourCycle: 'h23', weekday: 'short',
+      year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit'}).formatToParts(now).map(part => [part.type, part.value]));
+    return {date: isoDay(parts.year, parts.month, parts.day), weekday: parts.weekday, minutes: Number(parts.hour) * 60 + Number(parts.minute) + Number(parts.second) / 60};
+  }
+  const releaseHour = weekday => weekday === 'Sat' || weekday === 'Sun' ? 18 : 22;
+  function latestPuzzleDate(game, now = new Date()) {
+    if (!EASTERN_GAMES.has(game)) return isoDay(now.getFullYear(), now.getMonth() + 1, now.getDate());
+    const clock = easternClock(now);
+    return clock.minutes >= releaseHour(clock.weekday) * 60 ? shiftDay(clock.date, 1) : clock.date;
+  }
+  function nextRelease(game, now = new Date()) {
+    if (!EASTERN_GAMES.has(game)) return new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+    const clock = easternClock(now), today = releaseHour(clock.weekday) * 60;
+    const tomorrow = releaseHour(new Date(`${shiftDay(clock.date, 1)}T12:00:00Z`).toLocaleDateString('en-US', {weekday: 'short', timeZone: 'UTC'})) * 60;
+    const wait = clock.minutes < today ? today - clock.minutes : 24 * 60 - clock.minutes + tomorrow;
+    let guess = new Date(+now + wait * 60000);
+    // Correct a daylight-saving change between now and the release.
+    const drift = (easternClock(guess).minutes - (clock.minutes < today ? today : tomorrow) + 36 * 60) % (24 * 60) - 12 * 60;
+    if (Math.abs(drift) >= 1) guess = new Date(+guess - Math.round(drift) * 60000);
+    return guess;
+  }
+  window.Margin = {el, storage, GAMES, localDate, puzzleDate, gameForPath, extension, bindShortcut, shortcutLabel, latestPuzzleDate, nextRelease, shiftDay};
 })();

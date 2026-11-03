@@ -12,7 +12,7 @@ ROOT = Path(__file__).resolve().parent.parent
 FILES = [
     "LICENSE", "icons/LICENSE-lucide.txt", "manifest.json", "shared.js", "content.js", "ui.css", "games/connections-rating.js",
     "popup.html", "popup.css", "popup.js", "help.html", "help.css",
-    "stats.js", "stats-calendar.js", "stats-widget.js", "stats-worker.js", "stats-capture.js", "stats.css", "stats-panel.js",
+    "stats.js", "stats-calendar.js", "stats-widget.js", "stats-worker.js", "stats-capture.js", "daily-status.js", "stats.css", "stats-panel.js",
     *[f"games/{name}.js" for name in ("connections", "sudoku", "wordle", "crossword")],
     *[f"icons/games/{name}.{ext}" for name,ext in (("connections","svg"),("sudoku","svg"),("wordle","png"),("crossword","svg"))],
     *[f"icons/{size}.png" for size in (16, 32, 48, 128)],

@@ -129,10 +129,21 @@
       }
       undoButton.disabled=!undoStack.length;
     }
+    // Your four colors follow NYT's. If you marked a solved group in another
+    // color that is still open, NYT's color is retired, your marks of NYT's color
+    // on unsolved words move to the color you used, and that color's name resets.
+    function tradeColors(marks, solvedWords, shown, mine) {
+      const from=CORNERS[shown][0], to=CORNERS[mine][0];
+      for(const [word,tags] of Object.entries(marks)){
+        if(solvedWords.has(word))delete tags[to];
+        else if(tags[from]===shown){delete tags[from];tags[to]=mine;}
+        if(!Object.keys(tags).length)delete marks[word];
+      }
+    }
     function syncSolvedColors() {
       // Inspect only rendered solved categories; never read the puzzle's answers.
       const palette=[[249,223,109],[160,195,90],[176,196,239],[186,129,197]];
-      const before=JSON.stringify(state.marks), observed=new Set();
+      const before=JSON.stringify([state.marks,state.labels]), observed=new Set(), rows=[];
       for(const row of document.querySelectorAll('[class*="SolvedCategory-module_solvedCategory"],[data-testid="solved-category"]')){
         if(!visible(row)||row.closest(OWN_UI))continue;
         const words=row.querySelectorAll('[class*="SolvedCategory-module_cardListItem"],[data-solved-word]');
@@ -141,15 +152,24 @@
           const rgb=getComputedStyle(node).backgroundColor.match(/[\d.]+/g)?.map(Number);
           if(!rgb||rgb.length>3&&rgb[3]<0.95)continue;
           const index=palette.findIndex(color=>color.every((channel,i)=>Math.abs(channel-rgb[i])<=10));
-          if(index>=0){observed.add(index);break;}
+          if(index>=0){observed.add(index);rows.push({names:Array.from(words,wordOf),shown:index});break;}
         }
+      }
+      const solvedWords=new Set(rows.flatMap(row=>row.names));
+      for(const row of rows){
+        const mine=[0,1,2,3].find(index=>index!==row.shown&&!observed.has(index)&&row.names.every(word=>state.marks[word]?.[CORNERS[index][0]]===index));
+        if(mine===undefined)continue;
+        tradeColors(state.marks,solvedWords,row.shown,mine);
+        undoStack.forEach(marks=>tradeColors(marks,solvedWords,row.shown,mine));
+        // The color you used was not this group after all, so its name resets.
+        state.labels[mine]='ABCD'[mine];
       }
       if(board.length===16&&!observed.size)solvedColors.clear();
       for(const index of observed)solvedColors.add(index);
       pruneUndo();
       if(solvedColors.has(filter))filter=null;
       if(solvedColors.has(editingGroup))closePopup();
-      if(before!==JSON.stringify(state.marks))ctx.save();
+      if(before!==JSON.stringify([state.marks,state.labels]))ctx.save();
     }
     const listen = (target, type, fn, options) => {
       target.addEventListener(type, fn, options);
@@ -172,6 +192,14 @@
       .connection-popup .muted{color:var(--muted,#666);font-size:11px}.connection-popup p{margin:6px 0}.connection-popup .field{box-sizing:border-box;width:100%;padding:8px;border:1px solid var(--line,#d3d6da);border-radius:4px;background:var(--paper,#fff);color:inherit;font:13px Arial,sans-serif}
       .connection-popup-actions{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}.connection-attempt{padding:10px 0;border-top:1px solid var(--line,#d3d6da)}.connection-attempt:first-child{border-top:0}.connection-attempt-head{display:flex;align-items:center;gap:8px}.connection-attempt-head>span{margin-right:auto;font-size:10px}.connection-attempt .field{width:auto;max-width:170px;font-size:11px;padding:4px 6px}.connection-words{font-size:11px;font-weight:600;line-height:1.7;margin:5px 0}.connection-popup .empty{color:var(--muted,#666);padding:8px 0}
       @media(max-width:430px){.connection-inline-toolbar{gap:8px}.connection-inline-difficulty{font-size:12px}.connection-swatches{gap:4px}.connection-swatch{font-size:12px;padding:6px 4px}.connection-clear-group{width:24px;flex-basis:24px}}
+      .connection-submit-order{margin:10px 0 4px}.connection-submit-order>span{display:block;margin-bottom:6px;font-weight:600}
+      .connection-submit-order ol{margin:0;padding:0;list-style:none;display:grid;gap:4px}
+      .connection-submit-order li{display:flex;align-items:center;gap:8px;min-height:30px}
+      .connection-order-swatch{width:14px;height:14px;flex:0 0 14px;border-radius:3px}
+      .connection-order-name{flex:1}.connection-order-rank{width:14px;color:var(--muted,#666);font-size:12px}
+      .connection-order-move{width:28px;height:28px;padding:0;border:1px solid var(--line,#d3d6da);border-radius:4px;background:var(--paper,#fff);color:inherit;font:14px/1 Arial,sans-serif}
+      .connection-order-move:disabled{opacity:.35;cursor:default}
+      .connection-submit-order p{margin:6px 0 0;color:var(--muted,#666);font-size:12px}
       .connection-popup{font-family:var(--tool-font,Arial,Helvetica,sans-serif);font-size:14px}.connection-words{font-size:14px;line-height:1.5}.connection-one-away{font-size:12px;font-weight:600;padding:3px 7px;border:1px solid var(--line,#d3d6da);border-radius:3px}.connection-attempt-head{margin-bottom:6px}
 
     `;
@@ -185,8 +213,46 @@
       if (!feature('cornerLabels') || !Object.values(state.marks).some(marks => Object.keys(marks).length)) return;
       snapshotMarks();state.marks = {};ctx.save();renderOverlay();
     }});
-    panel.append(style);
-    if(!integrated)panel.append(undoButton,clearAllButton);
+    const COLOR_NAMES = ['Yellow','Green','Blue','Purple'];
+    let submitting = false, submitMessage = '', submitMessageTimer = null;
+    const submitGroupsButton = el('button', {className:'button connection-submit-groups',type:'button',textContent:'Submit groups',disabled:true,
+      title:'Submit every color with exactly four marked words, in your Submit order. Stops at the first miss.',onClick:() => submitGroups()});
+    // Default order: purple, blue, green, yellow. Settings can change it.
+    const DEFAULT_ORDER = [3,2,1,0];
+    function submitOrder() {
+      const saved = typeof ctx.option === 'function' ? ctx.option('submitOrder') : null;
+      return Array.isArray(saved) && saved.length === 4 && [0,1,2,3].every(index => saved.includes(index)) ? saved.slice() : DEFAULT_ORDER.slice();
+    }
+    const orderList = el('ol', {'aria-label':'Submit order'});
+    const orderPanel = el('div', {className:'connection-submit-order'}, el('span', {textContent:'Submit order'}), orderList,
+      el('p', {textContent:'Submit groups tries ready colors in this order and stops at the first miss.'}));
+    function moveOrder(index, delta) {
+      const order = submitOrder(), at = order.indexOf(index), to = at + delta;
+      if (to < 0 || to > 3) return;
+      [order[at], order[to]] = [order[to], order[at]];
+      ctx.setOption?.('submitOrder', order);
+      paintOrder(index, delta);
+    }
+    let paintedOrder = '';
+    function paintOrder(focusIndex = null, delta = 0) {
+      const order = submitOrder();
+      orderPanel.hidden = !feature('cornerLabels') || !feature('groupSubmit');
+      if (focusIndex === null && paintedOrder === order.join()) return;
+      paintedOrder = order.join();
+      orderList.replaceChildren(...order.map((index, rank) => {
+        const swatch = el('span', {className:'connection-order-swatch','aria-hidden':'true'});swatch.style.background = COLORS[index];
+        const up = el('button', {type:'button',className:'connection-order-move',textContent:'↑',disabled:rank === 0,'aria-label':`Move ${COLOR_NAMES[index]} earlier`,'data-order-move':`${index}:-1`,onClick:() => moveOrder(index,-1)});
+        const down = el('button', {type:'button',className:'connection-order-move',textContent:'↓',disabled:rank === 3,'aria-label':`Move ${COLOR_NAMES[index]} later`,'data-order-move':`${index}:1`,onClick:() => moveOrder(index,1)});
+        return el('li', {'data-color':String(index)}, el('span', {className:'connection-order-rank',textContent:String(rank + 1)}), swatch,
+          el('span', {className:'connection-order-name',textContent:COLOR_NAMES[index]}), up, down);
+      }));
+      if (focusIndex !== null) {
+        const target = orderList.querySelector(`[data-order-move="${focusIndex}:${delta}"]:not(:disabled)`) || orderList.querySelector(`[data-color="${focusIndex}"] button:not(:disabled)`);
+        target?.focus({preventScroll:true});
+      }
+    }
+    panel.append(style, orderPanel);
+    if(!integrated)panel.append(undoButton,clearAllButton,submitGroupsButton);
 
     const inlineDifficulty = el('span', { className: 'connection-inline-difficulty', role: 'status', 'aria-live': 'polite' });
     const swatches = el('div', { className: 'connection-swatches', role: 'group', 'aria-label': 'Your four categories' });
@@ -369,6 +435,7 @@
     function renderOverlay() {
       if (destroyed) return;
       clearAllButton.disabled = !Object.values(state.marks).some(marks => Object.keys(marks).length);
+      paintSubmit();
       if (moving || !feature('cornerLabels') || solvedColors.size === 4) {clearMarkers();return;}
       for (const [tile,marker] of markers) if (!board.includes(tile) || !tile.isConnected) removeMarker(tile,marker);
       for (const tile of board) {
@@ -416,19 +483,19 @@
       const submit=nativeButtons.find(node=>/^submit$/i.test(clean(node.textContent)));
       if(!submit){if(undoSlot)undoSlot.getRootNode().host.hidden=true;return;}
       undoSlot=ctx.inline('connections-undo',submit,'before',{width:'auto',display:'inline-block'});
-      if(undoButton.parentNode!==undoSlot)undoSlot.replaceChildren(el('style',{textContent:css+' .connection-undo:disabled{opacity:.5;cursor:default}'}),undoButton,clearAllButton);
+      if(undoButton.parentNode!==undoSlot||submitGroupsButton.parentNode!==undoSlot)undoSlot.replaceChildren(el('style',{textContent:css+' .connection-undo:disabled{opacity:.5;cursor:default}'}),undoButton,clearAllButton,submitGroupsButton);
       const host=undoSlot.getRootNode().host;
       host.hidden=!feature('cornerLabels');
       Object.assign(host.style,{width:'auto',maxWidth:'none',margin:'0',display:'inline-flex',flex:'0 0 auto',alignSelf:'center',alignItems:'center'});
       Object.assign(undoSlot.style,{display:'flex',alignItems:'center',justifyContent:'center',gap:'8px'});
-      undoButton.classList.add('connection-undo');clearAllButton.classList.add('connection-undo');
+      undoButton.classList.add('connection-undo');clearAllButton.classList.add('connection-undo');submitGroupsButton.classList.add('connection-undo');
       const sample=nativeButtons.find(node=>/^shuffle$/i.test(clean(node.textContent)))||submit;
       const styles=getComputedStyle(sample);
       // Native pills get their text inset from min-width, not horizontal padding.
       // Preserve that inset for our longer labels instead of copying the width alone.
       const labelRange=document.createRange();labelRange.selectNodeContents(sample);
       const horizontalPadding=Math.max(0,(sample.getBoundingClientRect().width-labelRange.getBoundingClientRect().width)/2-parseFloat(styles.borderLeftWidth));
-      for (const button of [undoButton,clearAllButton]) {
+      for (const button of [undoButton,clearAllButton,submitGroupsButton]) {
         for(const prop of ['fontFamily','fontSize','fontWeight','lineHeight','border','borderRadius','backgroundColor','color','padding','height','minWidth','boxSizing'])button.style[prop]=styles[prop];
         button.style.paddingLeft=button.style.paddingRight=`${horizontalPadding}px`;
         button.style.margin='0';
@@ -439,6 +506,14 @@
         actionRow=row;actionWrap=row.style.flexWrap;
       }
       if(getComputedStyle(row).display==='flex'&&getComputedStyle(row).flexWrap==='nowrap')row.style.flexWrap='wrap';
+      // Keep NYT's Shuffle, Deselect and Submit together. When everything cannot
+      // share one line, the extension's buttons take their own line below.
+      const natives=[...row.children].filter(node=>node!==host&&visible(node));
+      const own=[undoButton,clearAllButton,submitGroupsButton].filter(button=>!button.hidden).reduce((width,button)=>width+button.getBoundingClientRect().width,0)+16;
+      const gap=parseFloat(getComputedStyle(row).columnGap)||8;
+      const ownLine=natives.reduce((width,node)=>width+node.getBoundingClientRect().width,0)+own+gap*natives.length>row.clientWidth+1;
+      Object.assign(host.style,{order:ownLine?'1':'',flexBasis:ownLine?'100%':'auto',justifyContent:'center'});
+      Object.assign(undoSlot.style,{flexWrap:'wrap',rowGap:'8px'});
     }
     function syncInline() {
       if (!integrated) return;
@@ -473,6 +548,7 @@
       if (!Object.hasOwn(state.marks, word) && Object.keys(state.marks).length >= 64) {
         ctx.notice('This puzzle already has marks on 64 words. Erase a word’s marks before adding another.'); return;
       }
+      submitMessage = '';clearTimeout(submitMessageTimer);
       snapshotMarks(); state.marks[word] ||= {};
       if (state.marks[word][position] === index) delete state.marks[word][position];
       else state.marks[word][position] = index;
@@ -618,6 +694,119 @@
     }
 
 
+    // Submit groups: every unsolved color with exactly four marked words on the
+    // board, one at a time in the saved order, through NYT's own controls.
+    const pause = ms => new Promise(resolve => setTimeout(resolve, ms));
+    async function waitFor(check, timeout) {
+      const end = Date.now() + timeout;
+      for (;;) {
+        const value = check();
+        if (value || destroyed || Date.now() > end) return value;
+        await pause(60);
+      }
+    }
+    function readyGroups() {
+      if (!feature('cornerLabels') || !feature('groupSubmit') || solvedColors.size === 4) return [];
+      const words = [...new Set(board.map(wordOf))];
+      return submitOrder().filter(index => !solvedColors.has(index))
+        .map(index => ({ index, words: words.filter(word => state.marks[word]?.[CORNERS[index][0]] === index) }))
+        // A word with two colors is still undecided, so neither color is ready.
+        .filter(group => group.words.length === 4 && group.words.every(word => Object.keys(state.marks[word]).length === 1));
+    }
+    const nativeAction = pattern => Array.from(document.querySelectorAll('button')).find(node => visible(node) && !node.closest(OWN_UI) && pattern.test(clean(node.textContent)));
+    const unavailable = node => !node || node.disabled || node.getAttribute('aria-disabled') === 'true';
+    const tileFor = word => tiles().find(tile => wordOf(tile) === word);
+    function press(tile) {
+      // NYT selects a word on press, not on click. Corner marks inside the tile
+      // stop their own events, so these reach only the native tile.
+      const rect = tile.getBoundingClientRect(), point = { clientX: rect.x + rect.width / 2, clientY: rect.y + rect.height / 2, bubbles: true, cancelable: true, composed: true, button: 0 };
+      tile.dispatchEvent(new PointerEvent('pointerdown', { ...point, buttons: 1, pointerId: 1, pointerType: 'mouse', isPrimary: true }));
+      tile.dispatchEvent(new MouseEvent('mousedown', { ...point, buttons: 1 }));
+      tile.dispatchEvent(new PointerEvent('pointerup', { ...point, buttons: 0, pointerId: 1, pointerType: 'mouse', isPrimary: true }));
+      tile.dispatchEvent(new MouseEvent('mouseup', { ...point, buttons: 0 }));
+      // A click completes the gesture. NYT ignores it; simpler boards select on it.
+      if (!selected(tile)) tile.click();
+    }
+    function solvedWith(words) {
+      return Array.from(document.querySelectorAll('[class*="SolvedCategory-module_solvedCategory"],[data-testid="solved-category"]')).some(row => {
+        if (!visible(row) || row.closest(OWN_UI)) return false;
+        const solved = Array.from(row.querySelectorAll('[class*="SolvedCategory-module_cardListItem"],[data-solved-word]')).map(wordOf);
+        return solved.length === 4 && words.every(word => solved.includes(word));
+      });
+    }
+    async function submitGroup(words) {
+      if (selectedWords().length) {
+        const deselect = nativeAction(/^deselect\s*all$/i);
+        if (deselect && !unavailable(deselect)) deselect.click();
+        else for (const tile of tiles().filter(selected)) press(tile);
+        if (!await waitFor(() => selectedWords().length === 0, 1500)) return 'blocked';
+      }
+      for (const word of words) {
+        const tile = tileFor(word);
+        if (!tile) return 'blocked';
+        if (!selected(tile)) press(tile);
+        if (!await waitFor(() => { const current = tileFor(word); return current && selected(current); }, 1200)) return 'blocked';
+      }
+      const chosen = selectedWords();
+      if (chosen.length !== 4 || !words.every(word => chosen.includes(word))) return 'blocked';
+      const submit = await waitFor(() => { const node = nativeAction(/^submit$/i); return unavailable(node) ? null : node; }, 1500);
+      if (!submit) return 'blocked';
+      const mistakes = remainingMistakes(), before = feedbackText();
+      submit.click();
+      let missedAt = 0;
+      const result = await waitFor(() => {
+        if (solvedWith(words)) return 'correct';
+        const text = feedbackText(), kind = feedbackKind(text);
+        if (kind && text !== before) return kind;
+        const count = remainingMistakes();
+        if (mistakes !== null && count !== null && count < mistakes) {
+          // Give a "One away" message a moment to appear before calling it a miss.
+          missedAt ||= Date.now();
+          if (Date.now() - missedAt > 750) return 'incorrect';
+        }
+        return null;
+      }, 6000);
+      if (result !== 'correct') return result || 'unconfirmed';
+      // Let the solved row finish its animation before choosing the next group.
+      await waitFor(() => !tiles().some(tile => words.includes(wordOf(tile))) && !moving, 5000);
+      await pause(250);
+      return 'correct';
+    }
+    function showSubmitMessage(text) {
+      submitMessage = text;clearTimeout(submitMessageTimer);
+      submitMessageTimer = setTimeout(() => { submitMessage = ''; paintSubmit(); }, 3500);
+      paintSubmit();
+    }
+    async function submitGroups() {
+      if (submitting || !readyGroups().length) return;
+      submitting = true;closePopup();paintSubmit();
+      let solved = 0, stop = null;
+      try {
+        while (!destroyed && feature('groupSubmit')) {
+          board = tiles();syncSolvedColors();
+          const group = readyGroups()[0];
+          if (!group) break;
+          submitGroupsButton.textContent = `Submitting ${COLOR_NAMES[group.index].toLowerCase()}…`;
+          const result = await submitGroup(group.words);
+          if (result !== 'correct') { stop = result; break; }
+          solved++;
+        }
+      } finally {
+        submitting = false;
+        if (!destroyed) refresh();
+      }
+      const reason = { 'one-away': 'One away', incorrect: 'Not a group', duplicate: 'Already guessed', blocked: 'Board changed', unconfirmed: 'No answer from the game' }[stop];
+      showSubmitMessage(stop ? `${solved ? `${solved} solved · ` : ''}${reason || 'Stopped'}` : `${solved} ${solved === 1 ? 'group' : 'groups'} solved`);
+    }
+    function paintSubmit() {
+      const count = readyGroups().length;
+      submitGroupsButton.hidden = !feature('cornerLabels') || !feature('groupSubmit') || solvedColors.size === 4;
+      if (submitting) { submitGroupsButton.disabled = true;return; }
+      submitGroupsButton.disabled = !count;
+      submitGroupsButton.textContent = submitMessage || (count ? `Submit ${count} ${count === 1 ? 'group' : 'groups'}` : 'Submit groups');
+      submitGroupsButton.setAttribute('aria-label', submitMessage || (count ? `Submit ${count} marked ${count === 1 ? 'group' : 'groups'} in your Submit order` : 'Submit groups: mark four words with one color first'));
+    }
+
     function refresh() {
       board = tiles();
       syncSolvedColors();syncUndo();
@@ -625,7 +814,7 @@
       swatches.hidden = !feature('cornerLabels'); undoButton.hidden = clearAllButton.hidden = !feature('cornerLabels');
       inlineDifficulty.hidden = !feature('difficulty'); triesButton.hidden = !feature('attemptHistory');
       if (activePopup === historyPopup && !feature('attemptHistory') || activePopup === renamePopup && !feature('cornerLabels')) closePopup();
-      paintGroups(); syncInline();
+      paintGroups(); syncInline(); paintOrder();
       let rating = feature('difficulty') ? publicDifficulty() : null;
       const visibleRating = rating !== null;
       if (feature('difficulty') && rating === null) { requestDifficulty(); rating = publishedRating; }
@@ -676,7 +865,7 @@
     if (migrated) ctx.save();
     return { refresh, settingsChanged: refresh, destroy() {
       destroyed = true;
-      clearTimeout(deadline); clearTimeout(pending?.lossTimer); clearTimeout(motionTimer);
+      clearTimeout(deadline); clearTimeout(pending?.lossTimer); clearTimeout(motionTimer); clearTimeout(submitMessageTimer);
       feedbackObserver.disconnect(); listeners.forEach(remove => remove());
       closePopup(); clearMarkers(); popupHost.remove(); toolbar.remove();undoButton.remove();
       if(actionRow)actionRow.style.flexWrap=actionWrap;

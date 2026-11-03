@@ -16,9 +16,11 @@
         break;
       }
       case 'sudoku':{
-        button('Snyder').click();document.querySelector('[data-margin-cell="2"]').dispatchEvent(new PointerEvent('pointerdown',{bubbles:true}));document.querySelector('[data-margin-cell="2"]').click();
-        for(const n of [1,4])document.querySelector(`[data-margin-sudoku-digit="${n}"]`).click();
-        button('Center').click();for(const n of [2,6])document.querySelector(`[data-margin-sudoku-digit="${n}"]`).click();
+        const type=(index,digit)=>{const cell=document.querySelector(`.su-cell[data-cell="${index}"]`);cell.click();cell.dispatchEvent(new KeyboardEvent('keydown',{key:String(digit),bubbles:true,cancelable:true}));};
+        document.querySelector('[data-testid="candidate-mode"]').click();
+        for(const digit of [1,2,4])type(2,digit);
+        document.querySelector('[data-margin-inline="sudoku-colored"]')?.shadowRoot?.querySelector('input')?.click();
+        for(const [index,digit] of [[3,2],[3,6],[5,2],[5,6]])type(index,digit);
         break;
       }
       case 'wordle':{

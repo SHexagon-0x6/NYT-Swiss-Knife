@@ -1,0 +1,194 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>Sudoku Colored candidate checks</title>
+<div id="fixture"></div><div id="margin-host"></div><pre id="results"></pre>
+<script src="../preview/sudoku-board.js"></script>
+<script src="../games/sudoku.js"></script>
+<script>
+(async () => {
+  const output = document.querySelector('#results'), host = document.querySelector('#margin-host'), panel = host.attachShadow({mode: 'open'});
+  const el = (tag, attrs = {}, ...children) => {
+    const node = document.createElement(tag);
+    for (const [key, value] of Object.entries(attrs)) {
+      if (key.startsWith('on') && typeof value === 'function') node.addEventListener(key.slice(2).toLowerCase(), value);
+      else if (key in node && !key.startsWith('aria-') && !key.startsWith('data-')) node[key] = value;
+      else if (value !== false && value != null) node.setAttribute(key, String(value));
+    }
+    node.append(...children);
+    return node;
+  };
+  const wait = ms => new Promise(resolve => setTimeout(resolve, ms));
+  let checks = 0;
+  const check = (condition, message) => { if (!condition) throw Error(message); checks++; };
+  const slots = new Map();
+  const inline = (name, anchor, position = 'after') => {
+    if (!slots.has(name)) { const node = el('div', {'data-margin-inline': name}); const root = node.attachShadow({mode: 'open'}); const body = el('div'); root.append(body); slots.set(name, {node, body}); }
+    const slot = slots.get(name);
+    anchor.insertAdjacentElement(position === 'before' ? 'beforebegin' : 'afterend', slot.node);
+    return slot.body;
+  };
+  const row = () => slots.get('sudoku-colored').body;
+  const coloredBox = () => row().querySelector('input[type="checkbox"]');
+  const eye = () => row().querySelector('.colored-eye');
+  const key = value => window.dispatchEvent(new KeyboardEvent('keydown', {key: value, bubbles: true, cancelable: true}));
+  const keyOn = (target, value) => target.dispatchEvent(new KeyboardEvent('keydown', {key: value, bubbles: true, cancelable: true}));
+  // Find a drawn candidate by where it sits, like NYT's layout.
+  const inside = (practice, index, node) => { const c = practice.cells[index].getBoundingClientRect(), r = node.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2; return x >= c.left && x < c.right && y >= c.top && y < c.bottom; };
+  const mark = (practice, index, digit) => [...practice.board.querySelectorAll(`.su-candidates > svg.su-candidate[data-candidate="${digit}"]`)].find(node => inside(practice, index, node));
+  const ghost = (practice, index, digit) => [...practice.board.querySelectorAll(`.su-candidates.selected > .su-candidate-button[data-candidate="${digit}"]`)].find(node => inside(practice, index, node));
+  const colored = (practice, index, digit) => mark(practice, index, digit)?.hasAttribute('data-margin-colored');
+  try {
+    const fixture = document.querySelector('#fixture');
+    let practice = window.MarginSudokuBoard.build(fixture);
+    const features = {coloredCandidates: true}, options = {}, shortcut = {fn: null};
+    let saves = 0;
+    const ctx = {el, panel, state: {sudokuNotes: {1: {corner: [1], center: [2]}}}, settings: {}, save: () => saves++, notice: () => {}, isPreview: true, inline,
+      feature: (name, fallback) => features[name] ?? fallback, option: (name, fallback) => options[name] ?? fallback,
+      setOption: (name, value) => { options[name] = value; adapter.refresh(); }, shortcutLabel: () => 'B',
+      bindShortcut: callback => { shortcut.fn = callback; return () => { shortcut.fn = null; }; }};
+    let adapter = MarginGames.sudoku.mount(ctx);
+    check(!ctx.state.sudokuNotes && saves === 1, 'Old Snyder and Center notes are deleted when a puzzle opens');
+    const auto = practice.autoLabel;
+    check(auto.parentElement.classList.contains('su-keyboard__container') && auto.previousElementSibling === practice.undo, 'Auto candidate stays in its original place below the keypad');
+    check(auto.nextElementSibling?.getAttribute('data-margin-inline') === 'sudoku-colored' && row().textContent.includes('Colored candidate'), 'Colored candidate sits directly below Auto candidate');
+    check(auto.textContent.trim() === 'Auto candidate' && !document.querySelector('.sudoku-modes,[data-margin-overlay="sudoku"]'), 'No Snyder, Center or overlay controls remain');
+    const groups = [...practice.board.querySelectorAll('.su-candidates')].map(node => node.getBoundingClientRect());
+    check(groups.length > 2 && groups.every(r => r.left === groups[0].left && r.top === groups[0].top), 'The practice board stacks candidate groups at the board corner like NYT');
+    check(practice.normal.getAttribute('aria-pressed') === 'true' && !coloredBox().checked, 'The game starts in native Normal with Colored candidate off');
+
+    // Turning colors on enters native Candidate mode.
+    practice.select(2);
+    coloredBox().click();
+    check(coloredBox().checked && practice.candidate.getAttribute('aria-pressed') === 'true', 'Colored candidate switches the game to Candidate');
+    practice.keyboard.querySelector('[aria-label="Number 4"]').click();
+    await wait(30);
+    check(mark(practice, 2, 4) && colored(practice, 2, 4), 'A new candidate entered from the keypad is blue');
+    check(JSON.stringify(ctx.state.sudokuColored) === '{"2":[4]}', 'Colored marks are saved per square and digit');
+    coloredBox().click();
+    check(!coloredBox().checked && practice.candidate.getAttribute('aria-pressed') === 'true', 'Turning Colored candidate off leaves the game in Candidate, the mode it is in');
+    practice.normal.click();
+
+    // Plain candidates stay plain until painted.
+    practice.candidate.click();practice.select(3);
+    keyOn(practice.cells[3], '6');keyOn(practice.cells[3], '8');
+    await wait(30);
+    check(mark(practice, 3, 6) && !colored(practice, 3, 6) && !colored(practice, 3, 8), 'Normal candidates keep the game color');
+    shortcut.fn();
+    check(coloredBox().checked && practice.candidate.getAttribute('aria-pressed') === 'true', 'The Colored candidate shortcut turns it on');
+    keyOn(practice.cells[3], '6');
+    await wait(30);
+    check(mark(practice, 3, 6) && colored(practice, 3, 6), 'Pressing an existing candidate in Blue paints it without removing it');
+    keyOn(practice.cells[3], '6');
+    await wait(30);
+    check(mark(practice, 3, 6) && !colored(practice, 3, 6), 'Pressing it again unpaints it and the candidate stays');
+    keyOn(practice.cells[3], '6');await wait(30);
+    // Clicking the candidate in the selected square paints too.
+    ghost(practice, 3, 8).dispatchEvent(new MouseEvent('click', {bubbles: true, cancelable: true, button: 0}));
+    await wait(30);
+    check(colored(practice, 3, 8) && colored(practice, 3, 6), 'Clicking a candidate inside the square paints it');
+    shortcut.fn();
+    check(!coloredBox().checked && practice.candidate.getAttribute('aria-pressed') === 'true', 'The shortcut turns Blue off and keeps Candidate if you chose it');
+
+    // With Blue off, the game toggles the candidate away and its color is forgotten.
+    keyOn(practice.cells[3], '8');
+    await wait(30);
+    check(!mark(practice, 3, 8) && JSON.stringify(ctx.state.sudokuColored) === '{"2":[4],"3":[6]}', 'Removing a colored candidate the normal way forgets its color');
+    keyOn(practice.cells[3], '8');await wait(30);
+    check(mark(practice, 3, 8) && !colored(practice, 3, 8), 'Adding it back later gives a plain candidate');
+
+    // Colors and the eye.
+    const path = () => getComputedStyle(mark(practice, 3, 6).firstElementChild).fill;
+    check(path() === 'rgb(47, 111, 219)', 'Colored candidates use the default blue');
+    options.coloredColor = '#cc3300';adapter.refresh();
+    check(path() === 'rgb(204, 51, 0)', 'A custom hex color recolors every colored candidate');
+    const slant = (index, digit) => getComputedStyle(mark(practice, index, digit).firstElementChild).transform;
+    check(slant(3, 6) !== 'none' && slant(3, 8) === 'none', 'Colored candidates are italic by default; normal ones are not');
+    const italicBox = panel.querySelector('input[aria-label="Italic colored candidates"]');
+    check(italicBox.checked, 'Settings show Italic turned on');
+    italicBox.click();
+    check(options.coloredItalic === false && slant(3, 6) === 'none', 'Turning Italic off straightens colored candidates');
+    italicBox.click();
+    check(options.coloredItalic === true && slant(3, 6) !== 'none', 'Turning it back on slants them again');
+    eye().click();
+    check(getComputedStyle(mark(practice, 3, 6)).visibility === 'hidden' && getComputedStyle(mark(practice, 3, 8)).visibility !== 'hidden' && eye().getAttribute('aria-pressed') === 'true' && ctx.state.sudokuColoredHidden === true, 'The eye hides only colored candidates');
+    eye().click();
+    check(getComputedStyle(mark(practice, 3, 6)).visibility !== 'hidden' && eye().getAttribute('aria-label') === 'Hide colored candidates', 'The eye shows them again');
+
+    // Auto candidate: colors still show on the game's own candidates.
+    practice.autoInput.click();
+    await wait(30);
+    check(practice.autoInput.checked && colored(practice, 2, 4) && mark(practice, 5, 2) && !colored(practice, 5, 2), 'Colored marks stay blue when Auto candidate fills in candidates');
+    practice.select(5);coloredBox().click();
+    keyOn(practice.cells[5], '2');
+    await wait(30);
+    check(mark(practice, 5, 2) && colored(practice, 5, 2), 'Blue paints an Auto candidate without eliminating it');
+    keyOn(practice.cells[5], '1');
+    await wait(800);
+    check(!mark(practice, 5, 1) && !ctx.state.sudokuColored[5]?.includes(1), 'A digit the game refuses to add does not keep a blue mark');
+    practice.autoInput.click();await wait(30);
+    check(!practice.autoInput.checked && colored(practice, 2, 4) && colored(practice, 3, 6), 'Manual colored candidates return when Auto candidate is turned off');
+
+    // The native Normal button ends Blue entry.
+    practice.normal.click();
+    adapter.refresh();
+    check(!coloredBox().checked, 'Choosing native Normal turns Colored candidate off');
+    practice.select(7);keyOn(practice.cells[7], '7');
+    await wait(30);
+    check(practice.state().values[7] === '7' && !ctx.state.sudokuColored[7], 'Normal entries are untouched by Colored candidate');
+
+    // Erasing a square forgets its colors.
+    practice.candidate.click();practice.select(3);practice.erase.click();
+    await wait(500);
+    check(!ctx.state.sudokuColored[3], 'Deleting a square’s candidates removes their colored marks');
+
+    // Settings.
+    const hex = panel.querySelector('.colored-hex'), clear = panel.querySelector('button[aria-label^="Clear all colors"]'), wipe = panel.querySelector('button[aria-label="Delete all colored candidates from the board"]');
+    check(clear.textContent === 'Colors' && wipe.textContent === 'Colored candidates' && clear.closest('[role="group"]').textContent.startsWith('Clear all'), 'Settings offer Clear all: Colors and Colored candidates');
+    check(hex.value === '#cc3300' && !panel.querySelector('.colored-settings').hidden, 'Settings show the current hex color');
+    hex.value = 'colored';hex.dispatchEvent(new Event('change'));
+    check(options.coloredColor === '#cc3300' && hex.value === '#cc3300', 'An invalid hex value is rejected');
+    hex.value = '#00AA55';hex.dispatchEvent(new Event('change'));
+    check(options.coloredColor === '#00aa55', 'A valid hex value is saved');
+    const picker = panel.querySelector('input[type="color"]');
+    picker.value = '#112233';picker.dispatchEvent(new Event('input'));
+    check(options.coloredColor === '#00aa55' && panel.querySelector('.colored-hex').value === '#112233' && row().querySelector('.colored-row').style.getPropertyValue('--colored') === '#112233', 'Dragging the color picker previews without saving');
+    picker.dispatchEvent(new Event('change'));
+    check(options.coloredColor === '#112233', 'Closing the color picker saves the color once');
+    // A colored mark left behind for a candidate the game no longer shows.
+    ctx.state.sudokuColored[8] = [3];
+    practice.candidate.click();practice.select(8);keyOn(practice.cells[8], '3');await wait(30);
+    check(mark(practice, 8, 3) && !colored(practice, 8, 3) && !ctx.state.sudokuColored[8], 'A candidate added normally over a leftover blue mark is plain');
+    check(colored(practice, 2, 4), 'A colored candidate is on the board before clearing');
+    clear.click();
+    check(!Object.keys(ctx.state.sudokuColored).length && clear.disabled && !document.querySelector('[data-margin-colored]') && mark(practice, 2, 4), 'Clear all colors uncolors every candidate and keeps them on the board');
+
+    // Turning the tool off.
+    practice.select(6);coloredBox().click();keyOn(practice.cells[6], '2');await wait(30);
+    check(colored(practice, 6, 2), 'Blue works again after clearing');
+    features.coloredCandidates = false;adapter.refresh();
+    check(!document.querySelector('[data-margin-colored]') && slots.get('sudoku-colored').node.hidden && panel.querySelector('.colored-settings').hidden, 'Disabling Colored candidate hides its row and color');
+    check(shortcut.fn() === false, 'The shortcut does nothing while the tool is off');
+    features.coloredCandidates = true;adapter.refresh();
+    check(colored(practice, 6, 2) && !slots.get('sudoku-colored').node.hidden, 'Re-enabling restores saved colored marks');
+
+    // Delete colored candidates from the board through the game.
+    check(!coloredBox().checked, 'Turning the tool off also turned Colored candidate off');
+    coloredBox().click();practice.select(2);keyOn(practice.cells[2], '4');await wait(30);
+    check(colored(practice, 6, 2) && colored(practice, 2, 4) && coloredBox().checked, 'Two colored candidates are on the board');
+    wipe.click();
+    check(wipe.textContent === 'Delete 2? Click again' && mark(practice, 6, 2) && mark(practice, 2, 4), 'The first click only asks to confirm');
+    wipe.click();
+    for (let i = 0; i < 40 && wipe.textContent !== 'Colored candidates'; i++) await wait(50);
+    check(!mark(practice, 6, 2) && !mark(practice, 2, 4) && mark(practice, 8, 3) && !Object.keys(ctx.state.sudokuColored).length, 'The second click deletes only colored candidates from the board');
+    check(practice.state().active === 2 && practice.candidate.getAttribute('aria-pressed') === 'true' && !coloredBox().checked && wipe.disabled, 'Your square and Candidate mode are kept, and Colored candidate is off');
+
+    adapter.destroy();
+    check(!document.querySelector('[data-margin-colored],[data-margin-colored-hidden],[data-margin-colored-italic],style[data-margin-overlay]') && !shortcut.fn, 'Destroy removes page styles, marks and the shortcut');
+    practice.destroy();
+    output.textContent = `PASS: ${checks}`;
+    document.body.dataset.testResult = 'pass';
+  } catch (error) {
+    output.textContent = `FAIL after ${checks}: ${error.message}\n${error.stack}`;
+  }
+})();
+</script>

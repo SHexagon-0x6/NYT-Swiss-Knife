@@ -1,5 +1,14 @@
 # Changes
 
+## 0.7.7
+
+- Popup: each game name links to its puzzle (Sudoku: nytimes.com/puzzles/sudoku, Crossword: nytimes.com/crosswords).
+- Popup: show Done with the time until the next puzzle, or New puzzle ready, from the latest puzzle finished in this browser. Any Sudoku difficulty or daily crossword counts. Wordle and Connections reset at local midnight; Sudoku and crosswords at 10 p.m. ET for Tuesday–Saturday puzzles and 6 p.m. ET for Sunday and Monday puzzles (7 p.m. and 3 p.m. Pacific). Nothing is fetched and no account data is read. Clear history also removes Done status.
+- Popup: games you turn off move into Archive, a small link next to How to use; switch a game back on there to restore it.
+- Connections: Submit groups sends every unsolved color with exactly four single-color words through the game's own Submit, in the Submit order from Settings (purple, blue, green, yellow by default - reverse rainbow), and stops at the first miss. Each submission appears in Previous tries.
+- Sudoku: replace Snyder and Center marks with Colored candidate, below Auto candidate. Turn it on with the checkbox or a hotkey (B by default); candidates you enter or tap take your color (blue by default) in italic, and tapping an existing candidate colors or uncolors it. Turning it off never changes the game's mode. Works with Auto candidate.
+- Sudoku: an eye hides or shows colored candidates. Settings offer the hotkey, a hex color, Italic, and Clear all: Colors (keep the candidates) or Colored candidates (delete them from the board after a second click).
+
 ## 0.7.6
 
 - Remove Strands support, including sketch tools, the popup entry, page integration and the bundled game logo.

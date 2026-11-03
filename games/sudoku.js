@@ -1,389 +1,372 @@
 (() => {
   'use strict';
+  // Colored candidate: a second color for NYT's own candidates. While it is on,
+  // every candidate you enter or tap takes your color (for Snyder marks or any
+  // other use). Native Normal, Candidate and Auto candidate controls stay as-is.
   const SVG = 'http://www.w3.org/2000/svg';
-  const selectors = [
-    '[data-margin-game="sudoku"] [data-margin-cell]',
-    '.su-board .su-cell',
-    '[data-testid="sudoku-board"] [data-cell]',
-    '[data-testid="sudoku-cell"]',
-    '.sudoku-board [role="gridcell"]',
-    '[aria-label*="Sudoku"] [role="gridcell"]'
-  ];
-  const visible = node => { const r = node.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(node).visibility !== 'hidden'; };
-  const DIGIT_SELECTOR = '[data-margin-sudoku-digit], .su-candidate-button, [data-testid^="sudoku-number-"], .su-keyboard button, .su-candidates [role="button"]';
-  const UNDO_SELECTOR = '[data-margin-sudoku-undo],button.su-keyboard__undo';
-  function nativeDigit(node) {
-    if (!node || !visible(node) || node.closest('#margin-host,[data-margin-inline],dialog,[role="dialog"],[aria-modal="true"]')) return null;
-    const label = node.getAttribute('data-margin-sudoku-digit') || node.getAttribute('data-digit') || node.getAttribute('aria-label') || node.querySelector('title')?.textContent || node.textContent;
-    const match = String(label || '').trim().match(/^(?:number|digit)?\s*([1-9])(?:\s+(?:button|key))?$/i);
-    return match ? Number(match[1]) : null;
-  }
+  const DEFAULT_COLOR = '#2f6fdb';
+  const OWN = '#margin-host,[data-margin-inline],[data-margin-overlay]';
+  const MODAL = 'dialog,[role="dialog"],[aria-modal="true"]';
+  const KEYPAD_DIGIT = '.su-keyboard__number';
+  const CELL_DIGIT = '.su-candidates .su-candidate-button[data-candidate]';
+  const ERASE = '.su-keyboard__delete,[data-testid="clear-cell"]';
+  const UNDO = '.su-keyboard__undo';
+  const visible = node => { if (!node) return false; const r = node.getBoundingClientRect(); return r.width > 0 && r.height > 0 && getComputedStyle(node).visibility !== 'hidden'; };
+  const validColor = value => typeof value === 'string' && /^#[0-9a-f]{6}$/i.test(value);
+  const digitOf = value => { const match = String(value || '').trim().match(/^(?:number\s+)?([1-9])$/i); return match ? Number(match[1]) : null; };
   function cells() {
-    for (const selector of selectors) {
-      const found = Array.from(document.querySelectorAll(selector)).filter(visible);
-      if (found.length === 81) return found;
-    }
-    return [];
+    const found = Array.from(document.querySelectorAll('.su-board .su-cell')).filter(visible);
+    return found.length === 81 ? found : [];
   }
-  function filled(cell) {
-    if (cell.dataset.given === 'true' || cell.getAttribute('aria-readonly') === 'true' || /(?:^|\s)(?:given|clue)(?:\s|$)/i.test(cell.className || '')) return true;
-    const value = cell.querySelector('.su-cell__value, [data-testid="cell-value"], [data-margin-value], [class*="Cell_value"]');
-    if (value) return /[1-9]/.test(value.textContent);
-    const copy = cell.cloneNode(true);
-    copy.querySelectorAll('[class*="notes"], [class*="pencil"], [data-note], [data-margin-overlay]').forEach(node => node.remove());
-    return /^[1-9]$/.test(copy.textContent.trim());
-  }
+  const filled = cell => /(?:^|\s)prefilled(?:\s|$)/.test(cell.className || '') || !!cell.querySelector('.su-cell__value');
   const svgNode = (name, attrs) => {
     const node = document.createElementNS(SVG, name);
     for (const [key, value] of Object.entries(attrs)) node.setAttribute(key, value);
     return node;
   };
+  function eyeIcon(open) {
+    const icon = svgNode('svg', {viewBox: '0 0 24 24', 'aria-hidden': 'true'});
+    icon.append(svgNode('path', {d: 'M2.5 12s3.5-6.5 9.5-6.5S21.5 12 21.5 12s-3.5 6.5-9.5 6.5S2.5 12 2.5 12Z'}), svgNode('circle', {cx: 12, cy: 12, r: 2.8}));
+    if (!open) icon.append(svgNode('path', {d: 'M4 20 20 4'}));
+    return icon;
+  }
+
   window.MarginGames = window.MarginGames || {};
   window.MarginGames.sudoku = { mount(ctx) {
     const { el } = ctx;
-    ctx.state.sudokuNotes = ctx.state.sudokuNotes || {};
-    let mode = 'play', selected = -1, board = [], lastDrawing = '', destroyed = false, nativePad = null;
-    let replacedModeBar = null, nativeNormal = null, originalModeDisplay = '', originalModePriority = '';
-    let nativeUndo = null, originalUndoDisabled = false;
-    let autoCandidate=null,autoWrapper=null,autoPlaceholder=null,autoOriginalStyle=null,autoInputStyle=null,autoText=[];
-    const autoSlot=el('div',{'data-margin-inline':'sudoku-candidates'});
-    Object.assign(autoSlot.style,{display:'inline-flex',alignItems:'center',margin:'0 10px',font:'16px Arial,sans-serif',whiteSpace:'nowrap'});
-    const history = [];
     const feature = name => ctx.feature ? ctx.feature(name, true) : true;
-    const modeEnabled = value => value === 'play' || feature(value === 'corner' ? 'cornerNotes' : 'centerNotes');
-    const overlay = svgNode('svg', { 'aria-hidden': 'true', 'data-margin-overlay': 'sudoku' });
-    Object.assign(overlay.style, { position: 'absolute', inset: '0', width: '100%', height: '100%', pointerEvents: 'none', zIndex: '10', overflow: 'hidden' });
-    let overlayBoard = null, boardStyles = [];
-    function restoreBoardLayer() {
-      for (const [name,value,priority] of boardStyles) {
-        if (value) overlayBoard.style.setProperty(name,value,priority);
-        else overlayBoard.style.removeProperty(name);
+    const enabled = () => feature('coloredCandidates');
+    let previewColor = null;
+    const italic = () => ctx.option?.('coloredItalic') !== false;
+    const color = () => { const value = previewColor || ctx.option?.('coloredColor'); return validColor(value) ? value.toLowerCase() : DEFAULT_COLOR; };
+    // Snyder and Center marks were removed; drop their saved overlay notes.
+    if (ctx.state.sudokuNotes) { delete ctx.state.sudokuNotes; ctx.save(); }
+    const marks = ctx.state.sudokuColored && typeof ctx.state.sudokuColored === 'object' ? ctx.state.sudokuColored : {};
+    for (const [key, digits] of Object.entries(marks)) {
+      const index = Number(key), clean = Array.isArray(digits) ? [...new Set(digits.filter(d => Number.isInteger(d) && d >= 1 && d <= 9))].sort() : [];
+      if (!Number.isInteger(index) || index < 0 || index > 80 || !clean.length) delete marks[key]; else marks[key] = clean;
+    }
+    ctx.state.sudokuColored = marks;
+    let board = [], destroyed = false, coloredOn = false, press = null, boardRoot = null, rootColor = null;
+    const timers = new Set();
+    const later = (fn, ms) => { const id = setTimeout(() => { timers.delete(id); if (!destroyed) fn(); }, ms); timers.add(id); };
+
+    const pageStyle = document.createElement('style');
+    pageStyle.setAttribute('data-margin-overlay', 'sudoku-colored');
+    // Digits are drawn as shapes, so italic is a slight slant of each digit.
+    pageStyle.textContent = '.su-candidates>svg.su-candidate[data-margin-colored]>:not(title){fill:var(--margin-sudoku-colored,' + DEFAULT_COLOR + ')!important}' +
+      '[data-margin-colored-italic] .su-candidates>svg.su-candidate[data-margin-colored]>:not(title){transform:skewX(-12deg);transform-box:fill-box;transform-origin:50% 50%}' +
+      '[data-margin-colored-hidden] .su-candidates>svg.su-candidate[data-margin-colored]{visibility:hidden!important}';
+    (document.head || document.documentElement).append(pageStyle);
+
+    const isColored = (index, digit) => !!marks[index]?.includes(digit);
+    function setColored(index, digit, on) {
+      const set = new Set(marks[index] || []);
+      if (on === set.has(digit)) return;
+      if (on) set.add(digit); else set.delete(digit);
+      if (set.size) marks[index] = [...set].sort(); else delete marks[index];
+      ctx.save(); paint(); paintSettings();
+    }
+    // NYT positions every candidate digit inside its square, so match digits to
+    // squares by where they are drawn. Returns square index -> digit -> element.
+    function candidates() {
+      const rects = board.map(cell => cell.getBoundingClientRect()), found = new Map();
+      for (const mark of document.querySelectorAll('.su-candidates > svg.su-candidate[data-candidate]')) {
+        if (mark.closest(OWN)) continue;
+        const r = mark.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2;
+        if (!r.width && !r.height) continue;
+        const index = rects.findIndex(c => x >= c.left && x < c.right && y >= c.top && y < c.bottom);
+        const digit = Number(mark.getAttribute('data-candidate'));
+        if (index < 0 || !(digit >= 1 && digit <= 9)) continue;
+        if (!found.has(index)) found.set(index, new Map());
+        found.get(index).set(digit, mark);
       }
-      boardStyles = [];overlayBoard = null;
+      return found;
     }
-    function placeOverlay() {
-      let parent = board[0]?.closest('.su-board,[data-testid="sudoku-board"],[data-margin-game="sudoku"],.sudoku-board,[role="grid"]') || board[0]?.parentElement;
-      if (parent?.namespaceURI === SVG) parent = parent.parentElement;
-      if (!parent) {overlay.remove();return false;}
-      if (parent !== overlayBoard) {
-        restoreBoardLayer();overlayBoard = parent;
-        for (const [name,value] of [['position','relative'],['isolation','isolate']]) {
-          if (name === 'position' && getComputedStyle(parent).position !== 'static') continue;
-          boardStyles.push([name,parent.style.getPropertyValue(name),parent.style.getPropertyPriority(name)]);
-          parent.style.setProperty(name,value);
-        }
-        parent.append(overlay);lastDrawing = '';
-      }
-      return true;
-    }
-    function dialogOpen() {
-      return [...document.querySelectorAll('dialog[open],[role="dialog"],[aria-modal="true"],[data-native-settings],.su-modal-pause,.xwd__modal--content')].some(visible);
-    }
-    function layerVisibility() {
-      const value = dialogOpen() ? 'hidden' : 'visible';
-      if (overlay.style.visibility !== value) overlay.style.visibility = value;
-    }
-    const modalObserver = new MutationObserver(layerVisibility);
-    modalObserver.observe(document.documentElement,{subtree:true,childList:true,attributes:true,attributeFilter:['class','hidden','open','aria-hidden','aria-modal','style']});
-    const status = el('p', { className: 'muted small', role: 'status' });
-    const selection = el('p', { className: 'small', textContent: 'Choose Snyder or Center, then an empty cell.' });
-    const modes = el('div', { className: 'row sudoku-modes', role: 'group', 'aria-label': 'Mark placement' });
-    const modeButtons = {};
-    const focusAttributes = new Map();
-    const isNativeSelected=cell=>cell.matches('[aria-selected="true"],[data-selected="true"],.selected,.su-cell--selected');
-    function focusBoard(){
-      const cell=board[selected]||board.find(isNativeSelected)||board[0];
-      if(!cell?.isConnected)return;
-      if(!cell.hasAttribute('tabindex')&&cell.tabIndex<0){focusAttributes.set(cell,null);cell.setAttribute('tabindex','-1');}
-      cell.focus({preventScroll:true});
-    }
-    function nativeSelect(index){
-      const cell=board[index];if(!cell?.isConnected)return;
-      if(!isNativeSelected(cell))cell.click();
-      focusBoard();
-    }
-    function chooseMode(next, userAction = false) {
-      if(userAction){
-        board=cells();
-        if(mode==='play'){
-          const index=board.findIndex(isNativeSelected);
-          if(index>=0)selected=index;
-        }
-      }
-      mode = modeEnabled(next) ? next : 'play';
-      if (next === 'play' && userAction && nativeNormal?.isConnected && !nativeNormal.disabled) nativeNormal.click();
-      for (const [key, button] of Object.entries(modeButtons)) {
-        button.classList.toggle('active', key === mode);
-        button.setAttribute('aria-pressed', String(key === mode));
-      }
-      if(userAction){if(mode==='play'&&selected>=0)nativeSelect(selected);else focusBoard();}
-      updateSelection(); render();
-    }
-    function shortcutReady() {
-      return !destroyed&&cells().length===81&&!dialogOpen();
-    }
-    function selectMode(next) {
-      if(!shortcutReady()||!modeEnabled(next))return false;
-      board=cells();
-      chooseMode(next,true);
-      return true;
-    }
-    for (const [key, name] of [['play', 'Play'], ['corner', 'Snyder'], ['center', 'Center']]) {
-      modeButtons[key] = el('button', { className: 'button', type: 'button', textContent: name, onClick: () => chooseMode(key, true) });
-      modes.append(modeButtons[key]);
-    }
-    function updateSelection() {
-      const active = selected >= 0 && board[selected] && !filled(board[selected]);
-      selection.textContent = mode === 'play' ? '' : active ? `Row ${Math.floor(selected / 9) + 1}, column ${selected % 9 + 1} · ${mode === 'corner' ? 'Snyder' : 'Center'}` : 'Select an empty cell on the board.';
-      for (const button of digits.querySelectorAll('button')) button.disabled = mode === 'play' || !active;
-      clearCell.disabled = mode === 'play' || !active;
-      undo.disabled = history.length === 0;
-      undo.hidden = mode === 'play';
-      clearAll.hidden=mode==='play';clearAll.textContent=mode==='corner'?'Erase all Snyder':'Erase all Center';
-      clearAll.disabled=!Object.values(ctx.state.sudokuNotes).some(note=>note?.[mode]?.length);
-      syncNativeUndo();
-      undo.hidden=mode==='play'||!!(ctx.inline&&nativeUndo);
-      clearCell.hidden=mode==='play'||!!(ctx.inline&&[...document.querySelectorAll('[data-testid="clear-cell"],[data-margin-sudoku-erase]')].some(visible));
-      if (ctx.inline) {
-        selection.hidden = mode === 'play';
-        digits.hidden = mode === 'play' || !!nativePad;
-      }
-    }
-    function restoreNativeUndo() {
-      if (nativeUndo) nativeUndo.disabled = originalUndoDisabled;
-      nativeUndo = null;
-    }
-    function syncNativeUndo() {
-      const node = mode !== 'play' ? Array.from(document.querySelectorAll(UNDO_SELECTOR)).find(control => control.textContent.trim() === 'Undo' && visible(control) && !control.closest('#margin-host,[data-margin-inline],dialog,[role="dialog"],[aria-modal="true"]')) : null;
-      if (nativeUndo && nativeUndo !== node) restoreNativeUndo();
-      if (!node) return;
-      if (nativeUndo !== node) { nativeUndo = node; originalUndoDisabled = !!node.disabled; }
-      node.disabled = history.length === 0;
-    }
-    function remember() {
-      history.push({cell:selected,notes:structuredClone(ctx.state.sudokuNotes)});
-      if(history.length>30)history.shift();
-    }
-    function undoNotes() {
-      const change=history.pop();if(!change)return;
-      ctx.state.sudokuNotes=change.notes;selected=change.cell;
-      nativeSelect(selected);
-      ctx.save();updateSelection();render();
-    }
-    function eraseAll(){
-      if(mode==='play'||!Object.values(ctx.state.sudokuNotes).some(note=>note?.[mode]?.length))return;
-      remember();for(const note of Object.values(ctx.state.sudokuNotes))if(note)note[mode]=[];
-      ctx.save();updateSelection();render();
-    }
-    function toggleDigit(digit) {
-      if (mode === 'play' || selected < 0 || !board[selected] || filled(board[selected])) {
-        ctx.notice('Select an empty cell in Snyder or Center mode first.'); return;
-      }
-      remember();
-      const note = ctx.state.sudokuNotes[selected] || { corner: [], center: [] };
-      const set = new Set(Array.isArray(note[mode]) ? note[mode] : []);
-      if (set.has(digit)) set.delete(digit); else set.add(digit);
-      note[mode] = Array.from(set).sort((a, b) => a - b);
-      ctx.state.sudokuNotes[selected] = note;
-      ctx.save(); updateSelection(); render();
-    }
-    function eraseCell() {
-      if (selected < 0 || mode === 'play' || !board[selected] || filled(board[selected])) return;
-      const note = ctx.state.sudokuNotes[selected];
-      if (note?.[mode]?.length) { remember(); note[mode] = []; ctx.save(); updateSelection(); render(); }
-    }
-    const boardAction=action=>()=>{action();focusBoard();};
-    const digits = el('div', { className: 'margin-sudoku-digits' });
-    for (let digit = 1; digit <= 9; digit++) digits.append(el('button', { className: 'button', type: 'button', textContent: String(digit), 'aria-label': `Toggle mark ${digit}`, onClick: boardAction(() => toggleDigit(digit)) }));
-    const clearCell = el('button', { className: 'button', type: 'button', textContent: ctx.inline ? '⌫' : 'Erase selected marks', title: 'Erase this cell’s active marks', 'aria-label': 'Erase selected marks', onClick: boardAction(eraseCell) });
-    const undo = el('button', { className: 'button', type: 'button', textContent: 'Undo', 'aria-label':'Undo marks', onClick: boardAction(undoNotes) });
-    const clearAll=el('button',{className:'button',type:'button',textContent:'Erase all Snyder',onClick:boardAction(eraseAll)});
-    const style = el('style', { textContent: '.margin-sudoku-digits{display:grid;grid-template-columns:repeat(9,minmax(0,1fr));gap:3px}.margin-sudoku-digits[hidden]{display:none}.margin-sudoku-digits .button{padding:8px 0;min-width:0}.sudoku-inline{font:12px/1.4 Arial,sans-serif;color:#333;display:flex;flex-wrap:wrap;align-items:center;justify-content:center;gap:8px;padding:7px 0}.sudoku-inline .inline-label{font-size:11px;font-weight:600;color:#555;margin-right:2px}.sudoku-inline .sudoku-modes{display:inline-flex;flex-wrap:nowrap;gap:0;border:1px solid #bbb;border-radius:999px;overflow:hidden}.sudoku-inline .button{font:600 11px/1.2 Arial,sans-serif;background:#fff;color:#333;border:1px solid #c8c8c8;border-radius:999px;padding:7px 11px;min-height:29px;cursor:pointer}.sudoku-inline .sudoku-modes .button{border:0;border-radius:0}.sudoku-inline .button.active{background:#121212;color:#fff}.sudoku-inline .button:hover:not(:disabled):not(.active){background:#eee}.sudoku-inline .button:disabled{opacity:.35;cursor:default}.sudoku-inline .button:focus-visible{outline:2px solid #777;outline-offset:2px}.sudoku-inline .margin-sudoku-digits{flex-basis:100%;max-width:330px}.sudoku-inline .sudoku-selection{flex-basis:100%;text-align:center;margin:0;font-size:10px;color:#666}.sudoku-inline.native-keypad{padding:0;gap:6px}.sudoku-inline.native-keypad .inline-label{display:none}.sudoku-inline.native-keypad .sudoku-modes{width:100%;border-radius:3px;border-color:#d3d3d3}.sudoku-inline.native-keypad .sudoku-modes .button{flex:1;min-height:36px;font-size:12px;font-weight:400}.sudoku-inline [hidden]{display:none!important}' });
-    const tools = el('div', { className: ctx.inline ? 'inline-tools sudoku-inline' : 'stack' }, style,
-      ...(ctx.inline ? [el('span', { className: 'inline-label', textContent: 'Marks' })] : []), modes, undo, clearAll, clearCell, digits);
-    style.textContent += '.sudoku-inline[hidden]{display:none!important}';
-    if (ctx.inline) selection.className = 'sudoku-selection';
-    tools.append(selection);
-    const help = el('details', {}, el('summary', { textContent: 'Using pencil marks' }), el('p', { className: 'muted small', textContent: 'Corner marks for Snyder notation; Center marks for other possibilities. Use the game’s number buttons or type 1–9. Backspace erases this mode; Esc returns to Play. Undo restores your last 30 pencil changes across both modes. These marks are separate from NYT’s notes.' }));
-    ctx.panel.append(tools);
-    function restoreAutoCandidate(){
-      if(autoWrapper){
-        if(autoPlaceholder?.isConnected)autoPlaceholder.replaceWith(autoWrapper);
-        if(autoOriginalStyle===null)autoWrapper.removeAttribute('style');else autoWrapper.setAttribute('style',autoOriginalStyle);
-        for(const [node,text] of autoText)node.textContent=text;
-        if(autoCandidate){if(autoInputStyle===null)autoCandidate.removeAttribute('style');else autoCandidate.setAttribute('style',autoInputStyle);}
-      }
-      autoSlot.remove();autoCandidate=null;autoWrapper=null;autoPlaceholder=null;autoText=[];
-    }
-    function syncAutoCandidate(){
-      if(destroyed)return;
-      const wrapper=board.length?[...document.querySelectorAll('label.su-keyboard__auto')].find(label=>label.querySelector('input.su-keyboard__checkbox[type="checkbox"][name="lightenComplete"]')&&label.querySelectorAll('input,button,a,[role="button"]').length===1&&(label===autoWrapper||visible(label))):null;
-      if(autoWrapper&&autoWrapper!==wrapper)restoreAutoCandidate();
-      if(!wrapper)return;
-      autoCandidate=wrapper.querySelector('input');
-      const anchor=ctx.nativeControl?.(/^(?:Settings|More)(?: |$)/i)||document.querySelector('[data-margin-sudoku-toolbar]');
-      if(!anchor)return;
-      if(autoWrapper!==wrapper){
-        autoWrapper=wrapper;autoOriginalStyle=wrapper.getAttribute('style');autoInputStyle=autoCandidate.getAttribute('style');
-        autoPlaceholder=document.createComment('native auto candidates');wrapper.before(autoPlaceholder);
-        autoText=[...wrapper.childNodes].filter(node=>node.nodeType===3).map(node=>[node,node.textContent]);
-        for(const [node]of autoText)node.textContent=' Auto candidate';
-        wrapper.style.setProperty('display','inline-flex');wrapper.style.alignItems='center';wrapper.style.gap='5px';
-        autoSlot.append(wrapper);
-      }
-      const control=ctx.nativeControl?.(/^Print(?: |$)/i)||anchor;
-      const nativeStyle=getComputedStyle(control),height=Math.max(40,Math.min(56,anchor.getBoundingClientRect().height||48));
-      Object.assign(autoSlot.style,{height:`${height}px`,margin:'0 8px'});
-      Object.assign(wrapper.style,{height:'100%',margin:'0',gap:'8px',fontFamily:nativeStyle.fontFamily,fontSize:`${Math.max(14,parseFloat(nativeStyle.fontSize)||16)}px`,fontWeight:nativeStyle.fontWeight,lineHeight:'1.2',cursor:'pointer'});
-      Object.assign(autoCandidate.style,{width:'18px',height:'18px',margin:'0',accentColor:'#121212',flex:'0 0 18px'});
-      if(autoSlot.parentNode!==anchor.parentNode)anchor.before(autoSlot);
-    }
-    function nativeSettingChanged(event) { if (event.target === autoCandidate) queueMicrotask(syncAutoCandidate); }
-    function restoreNativeModes() {
-      if (replacedModeBar?.style.getPropertyValue('display') === 'none' && replacedModeBar.style.getPropertyPriority('display') === 'important') {
-        if (originalModeDisplay) replacedModeBar.style.setProperty('display', originalModeDisplay, originalModePriority);
-        else replacedModeBar.style.removeProperty('display');
-      }
-      replacedModeBar = null; nativeNormal = null;
-    }
-    function modeBar() {
-      const normal = document.querySelector('[data-testid="normal-mode"]');
-      const candidate = document.querySelector('[data-testid="candidate-mode"]');
-      const bar = normal?.closest('.su-keyboard__split');
-      if (!bar || !candidate || candidate.closest('.su-keyboard__split') !== bar || bar.querySelector('.su-candidate-button') ||
-          bar.closest('dialog,[role="dialog"],[aria-modal="true"],#margin-host,[data-margin-inline]') ||
-          normal.textContent.trim() !== 'Normal' || candidate.textContent.trim() !== 'Candidate' ||
-          bar.textContent.replace(/\s+/g, '') !== 'NormalCandidate' || (bar !== replacedModeBar && !visible(bar))) return null;
-      return { bar, normal };
-    }
-    function placeTools() {
-      const keys = Array.from(document.querySelectorAll(DIGIT_SELECTOR)).filter(node => nativeDigit(node) !== null);
-      nativePad = new Set(keys.map(nativeDigit)).size === 9 ? keys[0].closest('.su-candidates,.su-keyboard,[data-margin-sudoku-keypad],[data-testid="sudoku-keypad"]') || keys[0].parentElement : null;
-      const anyNotes = modeEnabled('corner') || modeEnabled('center');
-      const replacement = ctx.inline && board.length && nativePad && anyNotes ? modeBar() : null;
-      if (replacedModeBar && replacedModeBar !== replacement?.bar) restoreNativeModes();
-      tools.hidden = !anyNotes;
-      if (!ctx.inline || !board.length) return;
-      let anchor = replacement?.bar || nativePad || board[0].closest('.su-board,[data-margin-game="sudoku"],[data-testid="sudoku-board"],.sudoku-board');
-      if (!anchor) {
-        anchor = board[0].parentElement;
-        while (anchor && !board.every(cell => anchor.contains(cell))) anchor = anchor.parentElement;
-        if (anchor?.namespaceURI === SVG) anchor = anchor.closest('svg');
-      }
-      if (!anchor || anchor === document.body || anchor === document.documentElement) return;
-      const destination = ctx.inline('sudoku-pencil', anchor, nativePad ? 'before' : 'after');
-      if (destination && tools.parentNode !== destination) destination.append(tools);
-      if (destination && replacement && replacedModeBar !== replacement.bar) {
-        replacedModeBar = replacement.bar; nativeNormal = replacement.normal;
-        originalModeDisplay = replacedModeBar.style.getPropertyValue('display'); originalModePriority = replacedModeBar.style.getPropertyPriority('display');
-        replacedModeBar.style.setProperty('display', 'none', 'important');
-      }
-      tools.classList.toggle('native-keypad', !!replacedModeBar);
-      clearCell.textContent='⌫';
-      if(clearCell.parentNode!==tools)tools.insertBefore(clearCell,digits);
-    }
-    function render() {
+    function paint() {
       if (destroyed) return;
-      if (!placeOverlay()) return;
-      layerVisibility();
-      const origin = overlay.getBoundingClientRect();
-      const drawings = [], nativeHighlight=board.some(isNativeSelected);
-      board.forEach((cell, index) => {
-        if (filled(cell)) return;
-        const rect = cell.getBoundingClientRect();
-        if (rect.bottom < 0 || rect.top > innerHeight || rect.right < 0 || rect.left > innerWidth) return;
-        const note = ctx.state.sudokuNotes[index] || {};
-        drawings.push({ index, x: rect.x-origin.x, y: rect.y-origin.y, width: rect.width, height: rect.height, corner: modeEnabled('corner') ? note.corner || [] : [], center: modeEnabled('center') ? note.center || [] : [], active: selected === index && mode !== 'play' && !nativeHighlight });
-      });
-      const signature = JSON.stringify(drawings);
-      if (signature === lastDrawing) return;
-      lastDrawing = signature;
-      const fragment = document.createDocumentFragment();
-      for (const cell of drawings) {
-        if (cell.active) fragment.append(svgNode('rect', { x: cell.x + 2, y: cell.y + 2, width: cell.width - 4, height: cell.height - 4, rx: 2, fill: '#bbd5f0', 'fill-opacity': '.2', stroke: '#6b8ba7', 'stroke-width': 2 }));
-        const fontSize = Math.max(8, Math.min(12, cell.width * .22));
-        const cornerValues = cell.corner.filter(digit => Number.isInteger(digit) && digit >= 1 && digit <= 9);
-        // Sequential marks occupy the top and bottom edges, leaving the center independent.
-        cornerValues.forEach((digit, index) => {
-          const top = index < 5;
-          const slot = top ? index : index - 5;
-          const mark = svgNode('text', { x: cell.x + 4 + slot * (cell.width - 8) / 5, y: top ? cell.y + fontSize + 1 : cell.y + cell.height - 3, fill: '#444', 'font-size': fontSize, 'font-family': 'Arial, sans-serif', 'font-weight': 600 });
-          mark.textContent = String(digit); fragment.append(mark);
-        });
-        const centerValues = cell.center.filter(digit => Number.isInteger(digit) && digit >= 1 && digit <= 9);
-        if (centerValues.length) {
-          const text = svgNode('text', { x: cell.x + cell.width / 2, y: cell.y + cell.height / 2, 'dominant-baseline': 'central', 'text-anchor': 'middle', fill: '#444', 'font-size': Math.max(6, Math.min(fontSize + 1, (cell.width - 6) / (centerValues.length * .62))), 'font-family': 'Arial, sans-serif', 'font-weight': 600 });
-          text.textContent = centerValues.join(''); fragment.append(text);
+      board = cells();
+      const root = board[0]?.closest('.su-board') || null;
+      if (boardRoot && boardRoot !== root) restoreRoot();
+      if (root && root !== boardRoot) { boardRoot = root; rootColor = [root.style.getPropertyValue('--margin-sudoku-colored'), root.style.getPropertyPriority('--margin-sudoku-colored')]; }
+      if (boardRoot) {
+        if (boardRoot.style.getPropertyValue('--margin-sudoku-colored') !== color()) boardRoot.style.setProperty('--margin-sudoku-colored', color());
+        boardRoot.toggleAttribute('data-margin-colored-hidden', enabled() && !!ctx.state.sudokuColoredHidden);
+        boardRoot.toggleAttribute('data-margin-colored-italic', enabled() && italic());
+      }
+      const painted = new Set();
+      if (enabled() && board.length) for (const [index, digits] of candidates()) {
+        for (const [digit, mark] of digits) {
+          if (!isColored(index, digit)) continue;
+          painted.add(mark);
+          if (!mark.hasAttribute('data-margin-colored')) mark.setAttribute('data-margin-colored', '');
         }
       }
-      overlay.replaceChildren(fragment);
+      for (const mark of document.querySelectorAll('[data-margin-colored]')) if (!painted.has(mark)) mark.removeAttribute('data-margin-colored');
     }
-    function isOwnEvent(event) { return event.composedPath().some(node => node?.id === 'margin-host' || node?.hasAttribute?.('data-margin-inline')); }
-    function nativeKey(event) {
-      if (mode === 'play' || isOwnEvent(event) || event.button !== 0) return;
-      const target = event.target?.closest?.(DIGIT_SELECTOR);
-      const digit = nativeDigit(target);
-      const erase = event.target?.closest?.('[data-testid="clear-cell"], [data-margin-sudoku-erase]');
-      const undoTarget = event.target?.closest?.(UNDO_SELECTOR);
-      const undoKey = undoTarget?.textContent.trim() === 'Undo' ? undoTarget : null;
-      const action = erase || undoKey;
-      if (digit === null && (!action || !visible(action) || action.closest('dialog,[role="dialog"],[aria-modal="true"]'))) return;
-      event.preventDefault(); event.stopImmediatePropagation();
-      if (event.type === 'click') { if (digit !== null) toggleDigit(digit); else if (undoKey) undoNotes(); else eraseCell(); }
+    function restoreRoot() {
+      if (!boardRoot) return;
+      boardRoot.removeAttribute('data-margin-colored-hidden');boardRoot.removeAttribute('data-margin-colored-italic');
+      if (rootColor?.[0]) boardRoot.style.setProperty('--margin-sudoku-colored', rootColor[0], rootColor[1]); else boardRoot.style.removeProperty('--margin-sudoku-colored');
+      boardRoot = null; rootColor = null;
     }
-    function pick(event) {
-      if(isOwnEvent(event)||event.button!==0||event.target?.closest?.('dialog,[role="dialog"],[aria-modal="true"]'))return;
-      const index=board.findIndex(cell=>cell===event.target||cell.contains(event.target));
-      if(index<0)return;
-      selected=index;
-      // Native selection and focus must still move to the square in every mode.
-      // Only digit/erase input is intercepted while adding our marks.
-      if(mode!=='play')focusBoard();
-      updateSelection();render();
+    // Drop blue from candidates the game no longer shows in empty squares.
+    function reconcile(only = null) {
+      board = cells();
+      if (!board.length || dialogOpen()) return;
+      const map = candidates();
+      let changed = false;
+      for (const key of Object.keys(marks)) {
+        const index = Number(key);
+        if (only !== null && index !== only) continue;
+        const cell = board[index];
+        if (!cell || filled(cell)) continue;
+        const kept = marks[key].filter(digit => map.get(index)?.has(digit));
+        if (kept.length !== marks[key].length) { changed = true; if (kept.length) marks[key] = kept; else delete marks[key]; }
+      }
+      if (changed) { ctx.save(); paint(); paintSettings(); }
+    }
+
+    const modeButton = name => Array.from(document.querySelectorAll(`[data-testid="${name}-mode"]`)).find(node => visible(node) && !node.closest(OWN));
+    const candidateMode = () => modeButton('candidate')?.getAttribute('aria-pressed') === 'true';
+    const dialogOpen = () => Array.from(document.querySelectorAll(`${MODAL},.su-modal-pause,.xwd__modal--content`)).some(node => visible(node) && !node.closest(OWN));
+    const selectedIndex = () => board.findIndex(cell => /(?:^|\s)selected(?:\s|$)/.test(cell.className || '') || cell.getAttribute('aria-selected') === 'true');
+    // Turning colors on needs Candidate mode. Turning them off never changes the
+    // game's mode: whatever you chose stays.
+    function setColoredMode(on) {
+      on = !!on && enabled();
+      if (on === coloredOn) { paintRow(); return; }
+      coloredOn = on;
+      const candidate = modeButton('candidate');
+      if (on && candidate && candidate.getAttribute('aria-pressed') !== 'true') candidate.click();
+      paintRow();
+    }
+
+    // What one digit press means while blue tools are active.
+    function decide(digit) {
+      if (!enabled() || digit === null) return null;
+      board = cells();
+      const index = selectedIndex();
+      if (index < 0 || filled(board[index]) || !candidateMode()) return null;
+      const present = !!candidates().get(index)?.has(digit), blue = isColored(index, digit);
+      if (coloredOn) {
+        // Paint or unpaint a candidate that is already there without removing it.
+        if (present) return { block: true, apply: () => setColored(index, digit, !blue) };
+        // Add a missing candidate through the game, then paint it.
+        return { block: false, apply: () => { setColored(index, digit, true); later(() => reconcile(index), 700); } };
+      }
+      // The game removes this candidate, or adds a plain one where an old blue
+      // mark was left behind; either way forget its color.
+      if (blue) return { block: false, apply: () => setColored(index, digit, false) };
+      return null;
+    }
+    const ownEvent = event => event.composedPath().some(node => node?.nodeType === 1 && node.matches?.(OWN));
+    const stop = event => { event.preventDefault(); event.stopImmediatePropagation(); };
+    function pressedDigit(target) {
+      const key = target?.closest?.(KEYPAD_DIGIT);
+      if (key && !key.closest(`${OWN},${MODAL}`)) return digitOf(key.getAttribute('aria-label') || key.textContent);
+      const ghost = target?.closest?.(CELL_DIGIT);
+      if (ghost && !ghost.closest(OWN)) return digitOf(ghost.getAttribute('data-candidate'));
+      return null;
+    }
+    function pointer(event) {
+      if (destroyed || ownEvent(event) || event.button !== 0) return;
+      const target = event.target;
+      if (event.type === 'click' && target?.closest?.('[data-testid="normal-mode"]') && coloredOn) { setColoredMode(false); return; }
+      if (target?.closest?.(`${ERASE},${UNDO}`) && !target.closest(OWN)) {
+        if (event.type === 'click') { const index = selectedIndex(); later(() => reconcile(target.closest(UNDO) ? null : index), 450); }
+        return;
+      }
+      const digit = pressedDigit(target);
+      if (digit === null) return;
+      if (event.type === 'pointerdown' || event.type === 'mousedown' && press?.target !== target) {
+        press = { target, decision: decide(digit), time: Date.now() };
+      }
+      const current = press && press.target === target && Date.now() - press.time < 1500 ? press : { target, decision: event.type === 'click' ? decide(digit) : null };
+      if (current.decision?.block) stop(event);
+      if (event.type === 'click') { press = null; current.decision?.apply(); }
     }
     function keys(event) {
-      if (isOwnEvent(event) || event.target?.closest?.('input,textarea,select,[contenteditable="true"],dialog,[role="dialog"],[aria-modal="true"]') || event.metaKey || event.ctrlKey || event.altKey || event.isComposing || mode === 'play') return;
-      const digit = nativeDigit(event.target?.closest?.(DIGIT_SELECTOR));
-      if (digit !== null && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); event.stopImmediatePropagation(); toggleDigit(digit); return; }
-      const erase = event.target?.closest?.('[data-testid="clear-cell"], [data-margin-sudoku-erase]');
-      if (erase && visible(erase) && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); event.stopImmediatePropagation(); eraseCell(); return; }
-      const undoTarget = event.target?.closest?.(UNDO_SELECTOR);
-      const undoKey = undoTarget?.textContent.trim() === 'Undo' ? undoTarget : null;
-      if (undoKey && visible(undoKey) && (event.key === 'Enter' || event.key === ' ')) { event.preventDefault(); event.stopImmediatePropagation(); undoNotes(); return; }
-      if (event.key === 'Escape') { chooseMode('play', true); event.preventDefault(); event.stopImmediatePropagation(); return; }
-      if (selected < 0) {if(/^[1-9]$/.test(event.key)){event.preventDefault();event.stopImmediatePropagation();ctx.notice('Select an empty cell first.');}return;}
-      if (/^[1-9]$/.test(event.key)) { event.preventDefault(); event.stopImmediatePropagation(); toggleDigit(Number(event.key)); }
-      else if (event.key === 'Backspace' || event.key === 'Delete') { event.preventDefault(); event.stopImmediatePropagation(); eraseCell(); }
-      else if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key)) {
-        const delta = { ArrowLeft: -1, ArrowRight: 1, ArrowUp: -9, ArrowDown: 9 }[event.key];
-        const next = selected + delta;
-        if (next >= 0 && next < 81 && (Math.abs(delta) === 9 || Math.floor(next / 9) === Math.floor(selected / 9))) selected = next;
-        nativeSelect(selected);event.preventDefault(); event.stopImmediatePropagation(); updateSelection(); render();
+      if (destroyed || ownEvent(event) || event.metaKey || event.ctrlKey || event.altKey || event.isComposing || event.repeat) return;
+      if (event.target?.closest?.(`input:not([type="checkbox"]):not([type="radio"]),textarea,select,[contenteditable="true"],${MODAL}`)) return;
+      if (event.key === 'Backspace' || event.key === 'Delete') { board = cells(); const index = selectedIndex(); later(() => reconcile(index), 450); return; }
+      const digit = /^[1-9]$/.test(event.key) ? Number(event.key) : null;
+      const decision = decide(digit);
+      if (!decision) return;
+      if (decision.block) stop(event);
+      decision.apply();
+    }
+
+    // The Colored candidate row sits right below NYT's Auto candidate checkbox.
+    const coloredInput = el('input', { type: 'checkbox', 'aria-label': 'Colored candidate', onChange: event => setColoredMode(event.target.checked) });
+    const swatch = el('span', { className: 'colored-swatch', 'aria-hidden': 'true' });
+    const eye = el('button', { type: 'button', className: 'colored-eye', onClick: () => { ctx.state.sudokuColoredHidden = !ctx.state.sudokuColoredHidden; ctx.save(); paint(); paintRow(); } });
+    const hint = el('span', { className: 'colored-hint' });
+    const row = el('div', { className: 'colored-row' }, el('label', { className: 'colored-toggle' }, coloredInput, el('span', { textContent: 'Colored candidate' }), swatch), hint, eye);
+    const rowStyle = el('style', { textContent: `
+      .colored-row{display:flex;align-items:center;gap:8px;min-height:30px;color:var(--ink,#121212);font:var(--colored-weight,400) var(--colored-size,16px)/1.2 var(--colored-font,Arial,Helvetica,sans-serif)}
+      .colored-toggle{display:inline-flex;align-items:center;gap:8px;font:inherit;cursor:pointer}
+      .colored-toggle input{width:var(--colored-box,18px);height:var(--colored-box,18px);margin:0;flex:0 0 var(--colored-box,18px);accent-color:var(--colored,${DEFAULT_COLOR});cursor:pointer}
+      .colored-swatch{width:10px;height:10px;border-radius:50%;background:var(--colored,${DEFAULT_COLOR})}
+      .colored-hint{color:var(--muted,#666);font-size:.8em}
+      .colored-eye{display:grid;place-items:center;width:30px;height:30px;padding:0;border:0;border-radius:4px;background:transparent;color:inherit;cursor:pointer}
+      .colored-eye:hover{background:var(--surface,#f0f0f0)}.colored-eye svg{width:20px;height:20px;fill:none;stroke:currentColor;stroke-width:1.7;stroke-linecap:round;stroke-linejoin:round}
+      .colored-eye:focus-visible,.colored-toggle input:focus-visible{outline:2px solid #4b83b4;outline-offset:2px}
+      [hidden]{display:none!important}` });
+    function paintRow() {
+      coloredInput.checked = coloredOn;
+      row.style.setProperty('--colored', color());
+      const hidden = !!ctx.state.sudokuColoredHidden;
+      eye.replaceChildren(eyeIcon(!hidden));
+      eye.setAttribute('aria-pressed', String(hidden));
+      eye.setAttribute('aria-label', hidden ? 'Show colored candidates' : 'Hide colored candidates');
+      eye.title = hidden ? 'Show colored candidates' : 'Hide colored candidates';
+      const key = ctx.shortcutLabel?.('colored');
+      hint.textContent = key && key !== 'Off' ? key : '';
+      hint.hidden = !hint.textContent;
+    }
+    let slot = null;
+    function placeRow() {
+      if (!ctx.inline) return;
+      const auto = Array.from(document.querySelectorAll('label.su-keyboard__auto')).find(node => visible(node) && !node.closest(OWN));
+      const anchor = auto || document.querySelector('.su-keyboard__container') || document.querySelector('.su-keyboard') || board[0]?.closest('.su-board');
+      if (!enabled() || !anchor || !board.length) { if (slot) slot.getRootNode().host.hidden = true; return; }
+      slot = ctx.inline('sudoku-colored', anchor, 'after', { width: 'auto' });
+      if (row.parentNode !== slot) slot.replaceChildren(rowStyle, row);
+      const host = slot.getRootNode().host;
+      host.hidden = false;
+      const nativeLabel = getComputedStyle(auto || anchor);
+      Object.assign(host.style, { width: '100%', maxWidth: 'none', margin: auto ? '4px 0 0' : '8px 0', gridColumn: '1 / -1', boxSizing: 'border-box' });
+      row.style.setProperty('--colored-font', nativeLabel.fontFamily);
+      row.style.setProperty('--colored-size', `${Math.max(14, parseFloat(nativeLabel.fontSize) || 16)}px`);
+      row.style.setProperty('--colored-weight', nativeLabel.fontWeight);
+      // Line the checkbox up with Auto candidate's checkbox.
+      const box = auto?.querySelector('input')?.getBoundingClientRect(), own = host.getBoundingClientRect();
+      row.style.paddingLeft = box && own.width ? `${Math.max(0, Math.round(box.left - own.left))}px` : '0';
+      if (box?.width >= 10 && box.width <= 28) row.style.setProperty('--colored-box', `${Math.round(box.width)}px`);
+    }
+
+    // Settings: color, italic, and two ways to clear this puzzle's colored candidates.
+    // Dragging previews the color; it is saved once, when the picker closes.
+    const colorPicker = el('input', { type: 'color', 'aria-label': 'Colored candidate color',
+      onInput: event => { previewColor = event.target.value; colorText.value = color(); paint(); paintRow(); },
+      onChange: event => { previewColor = null; saveColor(event.target.value); } });
+    const colorText = el('input', { type: 'text', className: 'field colored-hex', maxLength: 7, spellcheck: false, autocomplete: 'off', 'aria-label': 'Colored candidate color hex', placeholder: DEFAULT_COLOR,
+      onChange: event => { const value = event.target.value.trim(); if (validColor(value)) saveColor(value); else { event.target.value = color(); ctx.notice('Use a hex color such as #2f6fdb.'); } } });
+    const resetColor = el('button', { type: 'button', className: 'button', textContent: 'Default', onClick: () => saveColor(DEFAULT_COLOR) });
+    const italicInput = el('input', { type: 'checkbox', 'aria-label': 'Italic colored candidates', onChange: event => { ctx.setOption?.('coloredItalic', event.target.checked); paint(); } });
+    const clearColors = el('button', { type: 'button', className: 'button', textContent: 'Colors', 'aria-label': 'Clear all colors. Candidates stay, uncolored.',
+      title: 'Uncolor every colored candidate in this puzzle. The candidates stay.', onClick: () => {
+        for (const key of Object.keys(marks)) delete marks[key];
+        ctx.save(); paint(); paintSettings();
+      } });
+    let armed = 0, armTimer = null, deleting = false;
+    const clearCandidates = el('button', { type: 'button', className: 'button', textContent: 'Colored candidates', 'aria-label': 'Delete all colored candidates from the board',
+      title: 'Delete every colored candidate from this puzzle\'s board. Click twice to confirm.', onClick: () => {
+        if (deleting) return;
+        if (!armed) {
+          armed = coloredOnBoard().length;
+          if (!armed) { for (const key of Object.keys(marks)) delete marks[key]; ctx.save(); paint(); paintSettings(); return; }
+          clearTimeout(armTimer); armTimer = setTimeout(() => { armed = 0; paintSettings(); }, 4000); paintSettings(); return;
+        }
+        armed = 0; clearTimeout(armTimer); deleteColored();
+      } });
+    const settings = el('div', { className: 'colored-settings' },
+      el('style', { textContent: '.colored-settings{display:grid;gap:8px;margin:10px 0 4px}.colored-settings-row{display:flex;align-items:center;gap:6px;flex-wrap:wrap}.colored-settings input[type=color]{width:32px;height:28px;padding:0;border:1px solid var(--line,#d3d6da);border-radius:4px;background:none}.colored-settings .colored-hex{width:78px;padding:5px 6px;font-family:monospace}.colored-settings .button{white-space:nowrap}.colored-settings label{display:inline-flex;align-items:center;gap:6px}.colored-clear{display:inline-flex;align-items:center;gap:6px;margin-left:10px}' }),
+      el('div', { className: 'colored-settings-row' }, el('span', { textContent: 'Color' }), colorPicker, colorText, resetColor),
+      el('div', { className: 'colored-settings-row' }, el('label', {}, italicInput, el('span', { textContent: 'Italic' })),
+        el('span', { className: 'colored-clear', role: 'group', 'aria-label': 'Clear all' }, el('span', { textContent: 'Clear all' }), clearColors, clearCandidates)));
+    // [square, digit] for every colored candidate the board shows now.
+    function coloredOnBoard() {
+      board = cells();
+      const map = candidates(), found = [];
+      for (const [key, digits] of Object.entries(marks)) for (const digit of digits) if (map.get(Number(key))?.has(digit)) found.push([Number(key), digit]);
+      return found;
+    }
+    const settle = () => new Promise(resolve => setTimeout(resolve, 60));
+    function selectSquare(cell) {
+      const r = cell.getBoundingClientRect(), point = { clientX: r.x + 4, clientY: r.y + 4, bubbles: true, cancelable: true, composed: true, button: 0 };
+      cell.dispatchEvent(new PointerEvent('pointerdown', { ...point, buttons: 1, pointerId: 1, pointerType: 'mouse', isPrimary: true }));
+      cell.dispatchEvent(new MouseEvent('mousedown', { ...point, buttons: 1 }));
+      cell.dispatchEvent(new PointerEvent('pointerup', { ...point, pointerId: 1, pointerType: 'mouse', isPrimary: true }));
+      cell.dispatchEvent(new MouseEvent('mouseup', point));
+      cell.click();
+    }
+    // Removes each colored candidate with the game's own keypad, one at a time,
+    // then puts back the square and mode you had.
+    async function deleteColored() {
+      deleting = true; paintSettings();
+      const targets = coloredOnBoard(), before = selectedIndex(), wasCandidate = candidateMode();
+      setColoredMode(false);
+      if (!wasCandidate) modeButton('candidate')?.click();
+      try {
+        for (const [index, digit] of targets) {
+          if (destroyed || !candidateMode()) break;
+          board = cells();
+          if (selectedIndex() !== index && board[index]) { selectSquare(board[index]); await settle(); }
+          board = cells();
+          if (selectedIndex() !== index || !candidates().get(index)?.has(digit)) continue;
+          const key = Array.from(document.querySelectorAll(KEYPAD_DIGIT)).find(node => visible(node) && !node.closest(OWN) && digitOf(node.getAttribute('aria-label') || node.textContent) === digit);
+          if (!key) break;
+          key.click(); await settle();
+        }
+      } finally {
+        for (const key of Object.keys(marks)) delete marks[key];
+        board = cells();
+        if (before >= 0 && board[before] && selectedIndex() !== before) selectSquare(board[before]);
+        if (!wasCandidate && candidateMode()) modeButton('normal')?.click();
+        deleting = false; ctx.save(); paint(); paintRow(); paintSettings();
       }
+    }
+    ctx.panel.append(settings);
+    function saveColor(value) {
+      if (!validColor(value)) return;
+      ctx.setOption?.('coloredColor', value.toLowerCase());
+      paint(); paintRow(); paintSettings();
+    }
+    function paintSettings() {
+      settings.hidden = !enabled();
+      if (colorPicker.value !== color()) colorPicker.value = color();
+      if (colorText !== colorText.getRootNode().activeElement && colorText.value !== color()) colorText.value = color();
+      italicInput.checked = italic();
+      clearColors.disabled = deleting || !Object.keys(marks).length;
+      clearCandidates.disabled = deleting || !Object.keys(marks).length;
+      clearCandidates.textContent = deleting ? 'Deleting…' : armed ? `Delete ${armed}? Click again` : 'Colored candidates';
+    }
+
+    const boardObserver = new MutationObserver(paint);
+    let observed = null;
+    function observeBoard() {
+      const root = board[0]?.closest('.su-board') || null;
+      if (root === observed) return;
+      boardObserver.disconnect(); observed = root;
+      if (root) boardObserver.observe(root, { subtree: true, childList: true, attributes: true, attributeFilter: ['data-candidate', 'class'] });
     }
     function refresh() {
       board = cells();
-      for (const value of ['corner', 'center']) modeButtons[value].hidden = !modeEnabled(value);
-      if (!modeEnabled(mode) || !board.length) chooseMode('play');
-      placeTools();
-      syncAutoCandidate();
-      const text = board.length ? 'Board connected · notes saved on this device' : 'Open a Sudoku puzzle to connect its board. If NYT’s layout changed, pencil tools stay inactive.';
-      if (status.textContent !== text) status.textContent = text;
-      updateSelection(); render();
+      if (!enabled() && coloredOn) setColoredMode(false);
+      // The game's own Normal button or shortcut ends blue entry.
+      if (coloredOn && board.length && modeButton('normal')?.getAttribute('aria-pressed') === 'true') setColoredMode(false);
+      observeBoard(); paint(); placeRow(); paintRow(); paintSettings();
     }
-    const geometry = () => render();
-    // See combined key presses before the pencil handlers can consume them.
-    const unbindShortcut = ctx.bindModeShortcuts?.({play:()=>selectMode('play'),corner:()=>selectMode('corner'),center:()=>selectMode('center')},shortcutReady);
-    window.addEventListener('pointerdown', nativeKey, true);
-    window.addEventListener('pointerup', nativeKey, true);
-    window.addEventListener('click', nativeKey, true);
-    window.addEventListener('pointerdown', pick, true);
-    window.addEventListener('click', pick, true);
-    window.addEventListener('keydown', keys, true);
-    window.addEventListener('change', nativeSettingChanged, true);
-    window.addEventListener('scroll', geometry, true);
+    const unbindShortcut = ctx.bindShortcut?.(() => {
+      if (destroyed || !enabled() || !cells().length || dialogOpen()) return false;
+      setColoredMode(!coloredOn);
+      return true;
+    }, 'colored');
+    const listeners = [['pointerdown', pointer], ['mousedown', pointer], ['pointerup', pointer], ['mouseup', pointer], ['click', pointer], ['keydown', keys]];
+    for (const [type, handler] of listeners) window.addEventListener(type, handler, true);
+    const geometry = () => paint();
     window.addEventListener('resize', geometry);
-    chooseMode('play'); refresh();
-    return { refresh, destroy() { destroyed = true; modalObserver.disconnect();restoreBoardLayer(); unbindShortcut?.();for(const [node]of focusAttributes)if(node.getAttribute('tabindex')==='-1')node.removeAttribute('tabindex');focusAttributes.clear(); restoreNativeModes(); restoreNativeUndo(); restoreAutoCandidate(); window.removeEventListener('pointerdown', nativeKey, true); window.removeEventListener('pointerup', nativeKey, true); window.removeEventListener('click', nativeKey, true); window.removeEventListener('pointerdown', pick, true); window.removeEventListener('click', pick, true); window.removeEventListener('keydown', keys, true); window.removeEventListener('change', nativeSettingChanged, true); window.removeEventListener('scroll', geometry, true); window.removeEventListener('resize', geometry); tools.remove(); overlay.remove(); } };
+    refresh();
+    return { refresh, destroy() {
+      destroyed = true; coloredOn = false; clearTimeout(armTimer);
+      for (const id of timers) clearTimeout(id); timers.clear();
+      unbindShortcut?.(); boardObserver.disconnect();
+      for (const [type, handler] of listeners) window.removeEventListener(type, handler, true);
+      window.removeEventListener('resize', geometry);
+      for (const mark of document.querySelectorAll('[data-margin-colored]')) mark.removeAttribute('data-margin-colored');
+      restoreRoot(); pageStyle.remove(); settings.remove(); row.remove();
+    } };
   } };
 })();

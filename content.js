@@ -1,7 +1,7 @@
 (() => {
   'use strict';
   if (document.getElementById('margin-host')) return;
-  const {el, storage, GAMES, localDate, gameForPath, extension} = window.Margin;
+  const {el, storage, GAMES, localDate, gameForPath, extension, latestPuzzleDate} = window.Margin;
   const isPreview = document.documentElement.dataset.marginPreview === 'true' && !extension;
   const shadowMode = extension ? 'closed' : 'open';
   const owned = '#margin-host,[data-margin-inline],[data-margin-overlay]';
@@ -10,12 +10,12 @@
   let refreshTimer, noticeTimer, scratchTimer, initCounter = 0;
   const slots = new Map();
   const FEATURES = {
-    connections:[['cornerLabels','Color corner marks'],['attemptHistory','Previous tries'],['difficulty','Daily difficulty']],
-    sudoku:[['cornerNotes','Snyder'],['centerNotes','Center']],
+    connections:[['cornerLabels','Color corner marks'],['groupSubmit','Submit marked groups'],['attemptHistory','Previous tries'],['difficulty','Daily difficulty']],
+    sudoku:[['coloredCandidates','Colored candidate']],
     wordle:[['letterProtection','Warn about conflicting letters'],['clickToEdit','Click to edit letters']],
     crossword:[['letterCycle','Try letters A–Z'],['candidateNotes','Notes']]
   };
-  let preferenceWrites=Promise.resolve(), geometryFrame=0;
+  let preferenceWrites=Promise.resolve(), pendingWrites=0, geometryFrame=0;
   const slotGeometry=new ResizeObserver(()=>geometry());
   const host = el('div', {id:'margin-host'});
   host.dataset.marginOrder = '100';
@@ -40,7 +40,7 @@
   }
   const shortcutControls=shortcutRow('Pencil mode');
   const candidateShortcutControls=shortcutRow('Notes','candidates');
-  const modeShortcuts=el('div',{className:'mode-shortcuts'},...['play','corner','center'].map((mode,i)=>shortcutRow(['Play','Snyder','Center'][i],mode)));
+  const coloredShortcutControls=shortcutRow('Colored candidate key','colored');
   function recordShortcut(event){
     if(!recordingShortcut||!context)return;
     event.preventDefault();event.stopImmediatePropagation();
@@ -80,7 +80,7 @@
   const settingsClose=el('button',{type:'button',className:'settings-close','aria-label':'Close notes and settings',textContent:'×',onClick:()=>closeSettings(true)});
   const settingsContent=el('div', {className:'settings-content',role:'region','aria-label':'Puzzle tools and settings'},
     el('div',{className:'settings-heading'},settingsTitle,settingsClose),
-    featurePanel,shortcutControls,candidateShortcutControls,modeShortcuts,panel,scratchLabel,el('div',{className:'settings-footer'},savedLabel));
+    featurePanel,shortcutControls,candidateShortcutControls,coloredShortcutControls,panel,scratchLabel,el('div',{className:'settings-footer'},savedLabel));
   const settingsTrigger=el('summary', {}, settingsIcon,settingsLabel);
   const settings = el('details', {className:'game-settings'},
     settingsTrigger,settingsContent);
@@ -277,27 +277,19 @@
     scratchLabel.hidden=true;
     shortcutControls.hidden=current.game!=='crossword';
     candidateShortcutControls.hidden=current.game!=='crossword';
-    modeShortcuts.hidden=current.game!=='sudoku';
-    for(const row of [shortcutControls,candidateShortcutControls,...modeShortcuts.children]){
+    coloredShortcutControls.hidden=current.game!=='sudoku'||!context.feature('coloredCandidates');
+    for(const row of [shortcutControls,candidateShortcutControls,coloredShortcutControls]){
       const mode=row.dataset.shortcutMode,button=row.querySelector('.shortcut-key');
       if(recordingShortcut?.button===button)continue;
       button.textContent=window.Margin.shortcutLabel(shortcutOptions(context,mode&&mode!=='candidates'?'sudoku':'crossword',mode));
       button.setAttribute('aria-pressed','false');
     }
   }
-  function sudokuShortcuts(saved){
-    const defaults={play:{key:'P'},corner:{key:'S'},center:{key:'C'}};
-    if(saved&&typeof saved.key==='string'){
-      if(!saved.key)return {play:{key:''},corner:{key:''},center:{key:''}};
-      defaults.corner=saved;
-      for(const mode of ['play','center'])if(sameShortcut(defaults[mode],saved))defaults[mode]={key:''};
-      return defaults;
-    }
-    return Object.fromEntries(Object.entries(defaults).map(([mode,value])=>[mode,typeof saved?.[mode]?.key==='string'?saved[mode]:value]));
-  }
+  // Sudoku has one shortcut: Colored candidate. Older Play, Snyder and Center keys are ignored.
+  const sudokuShortcut=saved=>typeof saved?.colored?.key==='string'?saved.colored:{key:'B'};
   function shortcutOptions(ctx,game,mode){
     const saved=ctx?.settings.shortcuts?.[game];
-    if(game==='sudoku')return sudokuShortcuts(saved)[mode||'corner'];
+    if(game==='sudoku')return sudokuShortcut(saved);
     if(mode==='candidates')return typeof saved?.candidates?.key==='string'?saved.candidates:sameShortcut(saved||{key:'Shift'},{key:'Control'})?{key:''}:{key:'Control'};
     return saved&&typeof saved.key==='string'?saved:{key:'Shift'};
   }
@@ -305,7 +297,7 @@
     return !!a.key&&a.key.toUpperCase()===b.key.toUpperCase()&&['ctrlKey','altKey','shiftKey','metaKey'].every(key=>!!a[key]===!!b[key]);
   }
   function setShortcut(ctx,game,value,mode){
-    if(!ctx||!['sudoku','crossword'].includes(game)||game==='sudoku'&&!['play','corner','center'].includes(mode))return;
+    if(!ctx||!['sudoku','crossword'].includes(game)||game==='sudoku'&&mode!=='colored')return;
     recordingShortcut=null;
     const update=saved=>{
       if(game==='crossword'){
@@ -314,29 +306,49 @@
         const candidates=typeof saved?.candidates?.key==='string'?saved.candidates:sameShortcut(pencil,{key:'Control'})?{key:''}:{key:'Control'};
         return {...value,candidates:sameShortcut(candidates,value)?{key:''}:candidates};
       }
-      const next=sudokuShortcuts(saved);next[mode]=value;
-      for(const other of Object.keys(next))if(other!==mode&&sameShortcut(next[other],value))next[other]={key:''};
-      return next;
+      return {colored:value};
     };
     ctx.settings={...ctx.settings,shortcuts:{...ctx.settings.shortcuts,[game]:update(ctx.settings.shortcuts?.[game])}};
     if(ctx===context){renderFeatures();adapter?.refresh?.();}
+    pendingWrites++;
     preferenceWrites=preferenceWrites.catch(()=>{}).then(async()=>{
       const latest=await storage.get('settings')||{};
       latest.shortcuts={...latest.shortcuts,[game]:update(latest.shortcuts?.[game])};
       await storage.set('settings',latest);
-    }).catch(()=>notice('Could not save that shortcut. Please try again.'));
+    }).catch(()=>notice('Could not save that shortcut. Please try again.')).finally(()=>{pendingWrites--;});
     return preferenceWrites;
   }
   function setFeature(ctx,game,name,enabled){
     if(![...FEATURES[game].map(item=>item[0]),'scratchpad'].includes(name))return;
     ctx.settings={...ctx.settings,features:{...ctx.settings.features,[game]:{...ctx.settings.features?.[game],[name]:!!enabled}}};
     if(ctx===context){renderFeatures();adapter?.refresh?.();placeSettings();}
+    pendingWrites++;
     preferenceWrites=preferenceWrites.catch(()=>{}).then(async()=>{
       const latest=await storage.get('settings')||{};
       latest.features={...latest.features,[game]:{...latest.features?.[game],[name]:!!enabled}};
       await storage.set('settings',latest);
-    }).catch(()=>notice('Could not save that preference. Please try again.'));
+    }).catch(()=>notice('Could not save that preference. Please try again.')).finally(()=>{pendingWrites--;});
     return preferenceWrites;
+  }
+  function setOption(ctx,game,name,value){
+    ctx.settings={...ctx.settings,options:{...ctx.settings.options,[game]:{...ctx.settings.options?.[game],[name]:value}}};
+    if(ctx===context){renderFeatures();adapter?.refresh?.();}
+    pendingWrites++;
+    preferenceWrites=preferenceWrites.catch(()=>{}).then(async()=>{
+      const latest=await storage.get('settings')||{};
+      latest.options={...latest.options,[game]:{...latest.options?.[game],[name]:value}};
+      await storage.set('settings',latest);
+    }).catch(()=>notice('Could not save that preference. Please try again.')).finally(()=>{pendingWrites--;});
+    return preferenceWrites;
+  }
+  // Sudoku and crosswords publish the next puzzle the evening before at the same
+  // address. File notes under the puzzle that was current when the page opened.
+  const keyDates=new Map();
+  function keyDate(game){
+    if(!['sudoku','crossword'].includes(game))return localDate();
+    const page=location.pathname+location.search;
+    if(!keyDates.has(page))keyDates.set(page,latestPuzzleDate(game));
+    return keyDates.get(page);
   }
   function identify() {
     const requested=new URL(location.href).searchParams.get('game');
@@ -345,7 +357,7 @@
     const archive=location.pathname.match(/\d{4}[-/]\d{2}[-/]\d{2}/)?.[0];
     const params=new URL(location.href).searchParams;
     const variant=['date','puzzle','puzzleId','difficulty'].map(key=>`${key}=${(params.get(key)||'').slice(0,80)}`).join('&');
-    return {game,key:`puzzle:${game}:${archive||localDate()}:${location.pathname.slice(0,256)}:${visibleId||''}:${variant}`};
+    return {game,key:`puzzle:${game}:${archive||keyDate(game)}:${location.pathname.slice(0,256)}:${visibleId||''}:${variant}`};
   }
   async function start() {
     clearTimeout(scratchTimer);
@@ -381,16 +393,11 @@
     const active=context,game=next.game;
     context.feature=(name,fallback)=>{const value=active.settings?.features?.[game]?.[name],definition=FEATURES[game].find(item=>item[0]===name);return typeof value==='boolean'?value:definition?(definition[2]??true):(fallback??true);};
     context.setFeature=(name,enabled)=>setFeature(active,game,name,enabled);
-    context.bindShortcut=(callback,mode)=>window.Margin.bindShortcut(callback,()=>({...shortcutOptions(active,game,mode),enabled:!!shortcutOptions(active,game,mode).key&&(mode!=='candidates'||active.feature('candidateNotes'))}));
+    context.option=(name,fallback)=>active.settings?.options?.[game]?.[name]??fallback;
+    context.setOption=(name,value)=>setOption(active,game,name,value);
+    const shortcutFeature={candidates:'candidateNotes',colored:'coloredCandidates'};
+    context.bindShortcut=(callback,mode)=>window.Margin.bindShortcut(callback,()=>({...shortcutOptions(active,game,mode),enabled:!!shortcutOptions(active,game,mode).key&&(!shortcutFeature[mode]||active.feature(shortcutFeature[mode]))}));
     context.shortcutLabel=mode=>window.Margin.shortcutLabel(shortcutOptions(active,game,mode));
-    context.bindModeShortcuts=(callbacks,ready)=>{
-      const releases=Object.entries(callbacks).map(([mode,callback])=>window.Margin.bindShortcut(callback,()=>{
-        const value=shortcutOptions(active,'sudoku',mode);
-        const enabled=mode==='play'?(active.feature('cornerNotes')||active.feature('centerNotes')):active.feature(mode==='corner'?'cornerNotes':'centerNotes');
-        return {...value,enabled:!!value.key&&enabled&&ready()};
-      }));
-      return ()=>releases.forEach(release=>release());
-    };
     renderFeatures();
     scratch.value=state.scratch||'';
     adapter=window.MarginGames[next.game].mount(context);
@@ -423,7 +430,8 @@
     if(changes.settings){
       const next=changes.settings.newValue||{};
       if(!context||!!context.settings.disabled?.includes(current?.game)!==!!next.disabled?.includes(current?.game))start().catch(()=>notice('Refresh this page to reload the puzzle tools.'));
-      else{context.settings=next;renderFeatures();adapter?.refresh?.();placeSettings();}
+      // While this tab is still saving, its own newer values win over older echoes.
+      else if(!pendingWrites){context.settings=next;renderFeatures();adapter?.refresh?.();placeSettings();}
     }else if(current&&changes[current.key]&&!changes[current.key].newValue)start().catch(()=>notice('Refresh this page to reload the puzzle tools.'));
   });
   window.addEventListener('pagehide',event=>{
