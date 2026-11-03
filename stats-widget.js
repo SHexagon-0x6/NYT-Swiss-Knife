@@ -46,9 +46,7 @@
     }).catch(() => {rememberedDate = '';});
   }
   function gameForRoute() {
-    if (/^\/(?:games|puzzles)\/sudoku\/hard\/?$/.test(location.pathname)) return 'sudoku-hard';
-    if (/^\/(?:crosswords\/game|games\/crosswords)\/daily(?:\/\d{4}\/\d{2}\/\d{2})?\/?$/.test(location.pathname)) return 'crossword-daily';
-    return null;
+    return /^\/(?:games|puzzles)\/sudoku\/hard\/?$/.test(location.pathname) ? 'sudoku-hard' : null;
   }
   function position() {
     if (!open) return;

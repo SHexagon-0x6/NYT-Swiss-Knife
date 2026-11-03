@@ -6,7 +6,7 @@ NYT Games Swiss Knife is an independent browser extension for Connections, Sudok
 
 The extension processes visible puzzle words, letters, clues, feedback and interactions to provide its tools. It also handles your marks, category names, observed game guesses and preferences.
 
-Hard Sudoku and full-size Daily Crossword completion times are recorded from visible results by default. You can disable recording or uncheck Record this time to restore the previous time for that date, or remove the new record if none existed. You can also add, edit or delete times through the calendar. Other Sudoku difficulties and Mini, Midi and Bonus crosswords are excluded.
+Hard Sudoku completion times are recorded from visible results by default. You can disable recording or uncheck Record this time to restore the previous time for that date, or remove the new record if none existed. You can also add, edit or delete times through the calendar. Other Sudoku difficulties and all crosswords are excluded. Daily Crossword times recorded by earlier versions are no longer shown, but they stay in your stored, synced and exported history until you clear history.
 
 Stats contain the game type, puzzle date, duration, totals, counts and revision or deletion metadata. Each puzzle date counts once; new completions replace saved times. Timestamps and deletion markers reconcile changes and prevent older synced copies from restoring removed records.
 

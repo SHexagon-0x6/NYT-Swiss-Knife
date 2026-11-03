@@ -13,11 +13,7 @@
     let puzzleDates = options.puzzleDates || {}, browsed = !!options.month;
     let data = S.normalize(options.data), game = options.game || 'sudoku-hard', month = options.month || (puzzleDates[game] || S.nytDate()).slice(0,7), selected = null, editingKey = '', busy = false;
     const card = node('div',null,'stats-calendar');
-    const tabs = node('div',null,'stats-tabs'); tabs.setAttribute('role','group'); tabs.setAttribute('aria-label','Choose game');
-    for (const [id,label] of [['sudoku-hard','Sudoku · Hard'],['crossword-daily','Daily Crossword']]) {
-      const tab = node('button',label); tab.type = 'button'; tab.dataset.game = id;
-      tab.addEventListener('click',() => {if (busy) return;game = id;selected = null;alignMonth();render();}); tabs.append(tab);
-    }
+    const gameLabel = node('p',null,'stats-game');
     const heading = node('div',null,'calendar-heading'), title = node('h2'); title.id = 'month-title';
     const previous = node('button','‹','month-arrow'), next = node('button','›','month-arrow');
     previous.type = next.type = 'button'; previous.id = 'previous'; next.id = 'next';
@@ -63,7 +59,7 @@
     for (const [color,label] of [['green','Fast'],['yellow','Normal'],['red','Slow']]) {
       const item = node('li'); item.title = colors[color]; item.setAttribute('aria-label',colors[color]);item.append(node('i',null,color),node('span',label));legend.append(item);
     }
-    card.append(tabs,heading,weekdays,grid,detail,average,legend); root.append(card);
+    card.append(gameLabel,heading,weekdays,grid,detail,average,legend); root.append(card);
     function renderDetail() {
       detail.hidden = !selected;
       if (!selected) {editingKey = '';return;}
@@ -78,7 +74,7 @@
       const currentDate = options.markPuzzleDate ? puzzleDates[game] : null;
       const summary = S.summarize(data,game), byDay = new Map(summary.days.map(day => [day.date,day]));
       value.textContent = S.formatTime(summary.average);
-      tabs.querySelectorAll('button').forEach(tab => tab.setAttribute('aria-pressed',String(tab.dataset.game === game)));
+      gameLabel.textContent = S.GAMES[game] || '';
       const start = new Date(month+'-01T12:00:00');
       title.textContent = start.toLocaleDateString(undefined,{month:'long',year:'numeric'});
       grid.replaceChildren();

@@ -8,16 +8,13 @@
   let timer, pending = false, retryAfter = 0, prompt = null;
   function inspect() {
     const path = location.pathname;
-    const game = /^\/(?:games|puzzles)\/sudoku\/hard\/?$/.test(path) ? 'sudoku-hard' :
-      /^\/(?:crosswords\/game|games\/crosswords)\/daily(?:\/\d{4}\/\d{2}\/\d{2})?\/?$/.test(path) ? 'crossword-daily' : null;
+    const game = /^\/(?:games|puzzles)\/sudoku\/hard\/?$/.test(path) ? 'sudoku-hard' : null;
     const date = game && puzzleDate(game);
     if (!date) return null;
-    const selector = game === 'sudoku-hard' ? '.xwd__modal--content' : '.xwd__congrats-modal';
-    for (const modal of document.querySelectorAll(selector)) {
+    for (const modal of document.querySelectorAll('.xwd__modal--content')) {
       if (!visible(modal)) continue;
       const text = modal.innerText.replace(/\s+/g,' ');
-      const match = game === 'sudoku-hard' ? text.match(/You finished a hard\s+puzzle\b[\s\S]*?\bin\s+(.+?)(?:\.|$)/i) :
-        text.match(/You solved (?:the|a)\s+(?:(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday|Daily)\s+)?Crossword\s+in\s+(.+?)(?:\.|$)/i);
+      const match = text.match(/You finished a hard\s+puzzle\b[\s\S]*?\bin\s+(.+?)(?:\.|$)/i);
       const seconds = match && S.parseTime(match[1]);
       if (seconds) return {game,date,seconds,modal};
     }

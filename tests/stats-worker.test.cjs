@@ -18,9 +18,9 @@ function worker() {
 }
 const solve = {game:'sudoku-hard',date:'2026-10-01',seconds:500};
 test('declining a repeat restores its prior time across reopenings, checkbox toggles and sync', async () => {
-  for (const game of ['sudoku-hard','crossword-daily']) {
-    const f = worker(), first = {...solve,game}, second = {...first,seconds:800}, key = `${game}:${solve.date}`;
-    const sender = game === 'sudoku-hard' ? f.tab : {...f.tab,url:'https://www.nytimes.com/crosswords/game/daily/2026/10/01'};
+  {
+    const game = 'sudoku-hard', f = worker(), first = {...solve,game}, second = {...first,seconds:800}, key = `${game}:${solve.date}`;
+    const sender = f.tab;
     await f.request('save-day',first);
     assert.equal((await f.request('record',second,sender)).data.accepted,true);
     await f.request('record',second,sender); // Reopen before making a choice.
@@ -66,8 +66,8 @@ test('calendar dates come from eligible NYT pages and remain local without recor
   const f = worker();
   assert((await f.request('puzzle-date',{game:'sudoku-hard',date:'2026-10-31'},f.tab)).ok);
   const crossword = {...f.tab,url:'https://www.nytimes.com/crosswords/game/daily/2026/10/30'};
-  assert((await f.request('puzzle-date',{game:'crossword-daily',date:'2026-10-30'},crossword)).ok);
-  const expected = {'sudoku-hard':'2026-10-31','crossword-daily':'2026-10-30'};
+  assert.equal((await f.request('puzzle-date',{game:'crossword-daily',date:'2026-10-30'},crossword)).ok,false);
+  const expected = {'sudoku-hard':'2026-10-31'};
   assert.deepEqual(f.data.local.statsPuzzleDatesV1,expected);
   assert.equal(f.data.local.statsLocalV1,undefined);assert.deepEqual(f.data.sync,{});
   assert.deepEqual((await f.request('get')).data.puzzleDates,expected);
@@ -86,9 +86,9 @@ test('checking a completion is read-only; simultaneous recordings keep one curre
   assert.equal(S.unpack(f.data.sync).records['sudoku-hard:2026-10-02'],500);
 });
 test('repeat completions replace faster and slower times, update totals, and survive stale sync', async () => {
-  for (const game of ['sudoku-hard','crossword-daily']) {
-    const f = worker(), result = {...solve,game}, key = `${game}:${solve.date}`;
-    const sender = game === 'sudoku-hard' ? f.tab : {...f.tab,url:'https://www.nytimes.com/crosswords/game/daily/2026/10/01'};
+  {
+    const game = 'sudoku-hard', f = worker(), result = {...solve,game}, key = `${game}:${solve.date}`;
+    const sender = f.tab;
     await f.request('record',result,sender);const stale = structuredClone(f.data.sync);
     for (const seconds of [200,800]) {
       const response = await f.request('record',{...result,seconds},sender);
@@ -121,10 +121,16 @@ test('reopening the same result preserves manual corrections but a new completio
   assert.equal((await f.request('record',{...solve,seconds:700},f.tab)).data.seconds,700);
   assert.equal(S.unpack(f.data.sync).records['sudoku-hard:2026-10-01'],700);
 });
-test('disabled games, paused capture, Mini, foreign pages and Incognito cannot save', async () => {
+test('disabled games, paused capture, crosswords, foreign pages and Incognito cannot save', async () => {
   const f = worker();
   for (const sender of [{...f.tab,url:'https://example.com/puzzles/sudoku/hard'},{...f.tab,url:'https://www.nytimes.com/puzzles/sudoku/easy'},{...f.tab,tab:{incognito:true}},f.page,{...f.tab,id:'bad'}]) assert.equal((await f.request('record',solve,sender)).ok,false);
-  assert.equal((await f.request('record',{...solve,game:'crossword-daily'},{...f.tab,url:'https://www.nytimes.com/crosswords/game/mini'})).ok,false);
+  for (const url of ['https://www.nytimes.com/crosswords/game/daily','https://www.nytimes.com/crosswords/game/daily/2026/10/01','https://www.nytimes.com/games/crosswords/daily','https://www.nytimes.com/crosswords/game/mini']) {
+    const crossword = {...f.tab,url};
+    for (const action of ['record','offer','completion-choice']) assert.equal((await f.request(action,{...solve,game:'crossword-daily',keep:true},crossword)).ok,false,`${action} ${url}`);
+    assert.equal((await f.request('save-day',{...solve,game:'crossword-daily'},crossword)).ok,false,`save-day ${url}`);
+    assert.equal((await f.request('view',{},crossword)).ok,false,`view ${url}`);
+  }
+  assert.equal((await f.request('save-day',{...solve,game:'crossword-daily'})).ok,false,'popup cannot add a crossword time');
   f.data.local.settings = {disabled:['sudoku']};assert.equal((await f.request('offer',solve,f.tab)).data.enabled,false);
   f.data.local.settings = {};await f.request('preferences',{enabled:false});assert.equal((await f.request('record',solve,f.tab)).data.saved,false);
   assert(!f.data.local.statsLocalV1);
@@ -147,6 +153,14 @@ test('sync failures keep durable local data and retry successfully', async () =>
 test('local failures are reported and cannot cause a sync-only save', async () => {
   const f = worker();f.flags.failLocal = true;
   assert.equal((await f.request('record',solve,f.tab)).ok,false);assert.deepEqual(f.data.sync,{});
+});
+test('Daily Crossword times saved by earlier versions stay in local, synced and exported history', async () => {
+  const f = worker();Object.assign(f.data.sync,S.pack({records:{'crossword-daily:2026-10-02':1500,'sudoku-hard:2026-10-02':600}}));
+  await f.request('sync');
+  assert.equal(f.data.local.statsLocalV1.records['crossword-daily:2026-10-02'],1500);
+  await f.request('record',solve,f.tab);
+  assert.equal(S.unpack(f.data.sync).records['crossword-daily:2026-10-02'],1500);
+  assert.equal((await f.request('get')).data.data.records['crossword-daily:2026-10-02'],1500);
 });
 test('offline device history merges; reset markers keep deleted results deleted', async () => {
   const f = worker();await f.request('record',solve,f.tab);const offline = structuredClone(f.data.sync);

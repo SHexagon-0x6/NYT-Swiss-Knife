@@ -114,7 +114,7 @@ const deadline = setTimeout(() => {console.error('Stats extension checks timed o
       await until(() => evaluate(game,`!document.querySelector('[data-margin-inline="stats-prompt"]')`),'old completion closes');
     }
     const label = `${Math.floor(seconds/60)}:${String(seconds%60).padStart(2,'0')}`;
-    const message = gameName === 'sudoku-hard' ? `You finished a hard puzzle in ${label}.` : `You solved the crossword in ${label}.`;
+    const message = `You finished a hard puzzle in ${label}.`;
     await evaluate(game,`document.querySelector('.modal-system-subheader').textContent=${JSON.stringify(message)};document.getElementById('result').hidden=false`);
     await until(async () => (await local())[gameName+':'+date] === seconds,'repeat completion replaces time');
     await until(async () => await inside(game,`return !!this.querySelector('input')?.checked && this.querySelector('.stats-offer-detail').textContent.includes(${JSON.stringify(label)})`),'repeat control displays new time');
@@ -144,33 +144,16 @@ const deadline = setTimeout(() => {console.error('Stats extension checks timed o
   await until(async () => await inside(game,`return this.querySelector('.stats-offer-status')?.textContent.includes('15:50')`),'reopened result keeps manual correction');
   assert.equal((await local())['sudoku-hard:2026-10-30'],950);
   report('Reopening a previously captured result after refresh preserves manual calendar corrections');
-  for (const path of ['/puzzles/sudoku/easy','/puzzles/sudoku/medium','/crosswords/game/mini','/crosswords/game/midi','/games/bonus/crossword/november']) {
+  for (const path of ['/puzzles/sudoku/easy','/puzzles/sudoku/medium','/crosswords/game/daily','/crosswords/game/daily/2026/10/31','/games/crosswords/daily','/crosswords/game/mini','/crosswords/game/midi','/games/bonus/crossword/november']) {
     await navigate(path);await evaluate(game,`document.getElementById('result').hidden=false`);await wait(250);assert.equal(await inside(game,'return true'),null,path);
   }
-  assert.equal(Object.keys(await local()).length,1);report('Easy, Medium, Mini, Midi and Bonus results are excluded');
-  await navigate('/crosswords/game/daily/2026/10/31');await evaluate(game,`document.querySelector('.xwd__details--date').textContent='October 31, 2026';document.getElementById('result').hidden=false`);
-  await until(() => inside(game,'return !!this.querySelector("input")?.checked'),'Daily automatic record');
-  await until(async () => Object.keys(await local()).length === 2,'Daily save');assert.equal((await local())['crossword-daily:2026-10-31'],1506);report('Full-size Daily Crossword result captures its final time and archive date');
-  await repeatSolve('crossword-daily','2026-10-31',1600);
-  await repeatSolve('crossword-daily','2026-10-31',1300);
-  report('Daily Crossword repeat solves replace the archive date’s time in local and synced history');
-  await inside(game,'this.querySelector("input").click()');
-  await until(async () => (await local())['crossword-daily:2026-10-31'] === 1600,'declined Crossword repeat retains previous time');
-  // The Daily congratulates the solver on a named weekday, with line breaks.
-  for (const [index,weekday] of ['Monday','Tuesday','Wednesday','Thursday','Friday','Saturday','Sunday'].entries()) {
-    await evaluate(game,`document.querySelector('.modal-system-subheader').innerHTML='You solved a <strong>${weekday}</strong><br>Crossword in <strong>${index+3}:00</strong>.'`);
-    await until(async () => (await local())['crossword-daily:2026-10-31'] === (index+3)*60,weekday+' result captured');
-  }
-  await navigate('/crosswords/game/daily');
-  await evaluate(game,`document.querySelector('.xwd__details--date').textContent='Monday, November 2, 2026';document.querySelector('.modal-system-subheader').innerHTML='You solved a <strong>Monday</strong><br>Crossword in <strong>3:00</strong>.';document.getElementById('result').hidden=false`);
-  await until(async () => (await local())['crossword-daily:2026-11-02'] === 180,'user Monday result captured');
-  await until(() => inside(game,`return this.querySelector('input')?.checked && this.querySelector('.stats-offer-detail').textContent.includes('3:00')`),'Monday recording control');
-  assert.equal(await evaluate(stats,`chrome.storage.sync.get(null).then(d=>MarginStats.unpack(d).records['crossword-daily:2026-11-02'])`),180);
-  report('All seven weekday congratulations capture correctly; the reported Monday 3:00 result uses NYT’s November 2 date');
-  await navigate('/crosswords/game/daily');await evaluate(game,`document.querySelector('.xwd__details--date').remove();document.getElementById('result').hidden=false`);await wait(400);assert.equal(await inside(game,'return true'),null);report('An ambiguous Crossword date fails closed');
+  assert.equal(Object.keys(await local()).length,1);report('Easy, Medium and every crossword result (Daily, Mini, Midi, Bonus) are excluded');
+  await navigate('/crosswords/game/daily/2026/10/31');await wait(250);
+  assert.equal(await inside(game,'return true','[data-margin-inline="stats-logo"]'),null);
+  report('Daily Crossword pages show no stats logo');
   await navigate('/puzzles/sudoku/hard');await evaluate(game,`document.querySelector('.pz-game-date').remove();document.getElementById('result').hidden=false`);await wait(400);assert.equal(await inside(game,'return true'),null);report('A missing Sudoku puzzle date is never replaced by the computer date');
-  await navigate('/crosswords/game/daily/2026/10/31');
-  await evaluate(game,`document.querySelector('.xwd__details--date').textContent='October 31, 2026'`);
+  await navigate('/puzzles/sudoku/hard');
+  await evaluate(game,`document.querySelector('.pz-game-date').textContent='October 31, 2026'`);
   // Verify the actual UI with enough data to exercise all calendar colors.
   await send('Page.bringToFront',{},stats);
   await evaluate(stats,`(async()=>{await chrome.runtime.sendMessage({type:'swiss-stats',action:'clear'});const records={};for(let i=1;i<=25;i++){const date='2026-10-'+String(i).padStart(2,'0');records['sudoku-hard:'+date]=i<=10?400+i*30:i%3===0?200+i:i%3===1?1100+i:600+i;}const previous=await chrome.storage.local.get('statsLocalV1');await chrome.storage.local.set({statsLocalV1:{records,resetAt:previous.statsLocalV1.resetAt}});})()`);
@@ -183,7 +166,7 @@ const deadline = setTimeout(() => {console.error('Stats extension checks timed o
   assert(await evaluate(stats,`document.getElementById('day-detail').hidden`));
   await evaluate(stats,`document.querySelector('[data-date="2026-10-12"]').click()`);
   assert.equal(await evaluate(stats,`document.querySelector('#day-detail strong').textContent`),'3:32');
-  await evaluate(stats,`document.querySelector('[data-game="sudoku-hard"]').click()`);
+  assert(await evaluate(stats,`document.querySelector('.stats-game').textContent==='Sudoku · Hard' && !document.querySelector('.stats-calendar button[data-game]')`));
   report('Compact calendar shows colored dates and one average; only a date click reveals its time');
   mkdirSync(join(root,'test-results'),{recursive:true});
   for (const [width,height,name] of [[1280,1100,'stats-desktop'],[390,1100,'stats-mobile']]) {
@@ -198,9 +181,7 @@ const deadline = setTimeout(() => {console.error('Stats extension checks timed o
   await inside(game,'this.querySelector("button").dispatchEvent(new MouseEvent("click",{bubbles:true,detail:1}))',logoSelector);
   await until(() => inside(game,'return this.querySelector(".popover-status").textContent === ""',panelSelector),'popover data');
   assert.equal(await inside(game,'return this.querySelector(".day[aria-current=date]")?.dataset.date',panelSelector),'2026-10-31');
-  report('Crossword calendar dot follows the displayed archived puzzle date');
-  await inside(game,`this.querySelector('[data-game="sudoku-hard"]').click();`,panelSelector);
-  assert(await inside(game,`return !this.querySelector('.day.today,.day[aria-current="date"]')`,panelSelector));
+  report('Sudoku calendar dot follows the displayed puzzle date');
   await inside(game,`const current=new Date(this.querySelector('#month-title').textContent+' 1'),year=current.getFullYear(),month=current.getMonth()+1,delta=(year-2026)*12+month-10;for(let i=0;i<Math.abs(delta);i++)this.querySelector(delta>0?'#previous':'#next').click();`,panelSelector);
   assert.equal(await inside(game,'return this.querySelector("#average").textContent',panelSelector),'10:17');
   assert(await inside(game,'return this.querySelector("#day-detail").hidden && [...this.querySelectorAll(".day")].every(day => /^\\d+$/.test(day.textContent))',panelSelector));
@@ -228,10 +209,8 @@ const deadline = setTimeout(() => {console.error('Stats extension checks timed o
   assert(await evaluate(stats,`!document.querySelector('.day.today,.day[aria-current="date"]')`));
   await inside(game,'this.querySelector("button").click()',logoSelector);
   await until(() => inside(game,`return this.querySelector('.day[aria-current="date"]')?.dataset.date === '2026-11-02'`,panelSelector),'Sudoku page marks its printed puzzle date');
-  await inside(game,`this.querySelector('[data-game="crossword-daily"]').click()`,panelSelector);
-  assert(await inside(game,`return !this.querySelector('.day.today,.day[aria-current="date"]')`,panelSelector));
   await inside(game,`this.querySelector('.popover-close').click()`,panelSelector);
-  report('Only the puzzle open on each NYT page gets a dot; cached dates never mark the main popup or the other game');
+  report('Only the puzzle open on the NYT page gets a dot; cached dates never mark the main popup');
   await evaluate(stats,`document.querySelector('[data-date="2026-11-02"]').click();document.querySelector('.day-editor input').value='12:16';document.querySelector('.day-editor').requestSubmit()`);
   await until(async () => (await local())['sudoku-hard:2026-11-02'] === 736,'manual add');
   await until(() => evaluate(stats,`!document.querySelector('.day-editor input').disabled`),'editor ready');

@@ -1,10 +1,11 @@
 /* Shared, deterministic statistics. No page or account data is read here. */
 (() => {
   'use strict';
-  const GAMES = {'sudoku-hard': 'Sudoku · Hard', 'crossword-daily': 'Daily Crossword'};
+  const GAMES = {'sudoku-hard': 'Sudoku · Hard'};
   const PREFIX = 'swiss:stats:2:', LEGACY_PREFIX = 'swiss:stats:1:', RESET = PREFIX+'reset', SYNC_BUDGET = 96*1024;
   // Reserved codes allow a conservative six-results-per-day capacity test.
-  // Capture and the UI still support only Hard Sudoku and Daily Crossword.
+  // Capture and the UI support only Hard Sudoku. Daily Crossword times saved
+  // by earlier versions stay decodable so sync and export never drop them.
   const CODES = {'sudoku-easy':'e','sudoku-medium':'m','sudoku-hard':'h','crossword-mini':'i','crossword-midi':'d','crossword-daily':'c'};
   const validDate = value => typeof value === 'string' && /^20\d{2}-\d{2}-\d{2}$/.test(value) &&
     Number.isFinite(Date.parse(value)) && new Date(value).toISOString().slice(0,10) === value;

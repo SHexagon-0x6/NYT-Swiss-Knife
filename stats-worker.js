@@ -60,8 +60,7 @@ function eligible(url, game) {
   try {
     const u = new URL(url);
     if (u.origin !== 'https://www.nytimes.com') return false;
-    return game === 'sudoku-hard' ? /^\/(?:puzzles|games)\/sudoku\/hard\/?$/.test(u.pathname) :
-      game === 'crossword-daily' && /^\/(?:crosswords\/game|games\/crosswords)\/daily(?:\/\d{4}\/\d{2}\/\d{2})?\/?$/.test(u.pathname);
+    return game === 'sudoku-hard' && /^\/(?:puzzles|games)\/sudoku\/hard\/?$/.test(u.pathname);
   } catch { return false; }
 }
 async function dispatch(message, sender) {
@@ -103,13 +102,13 @@ async function dispatch(message, sender) {
     const date = message.date, seconds = message.seconds, now = Date.now();
     const key = `${message.game}:${date}`;
     if (!S.validRecord(key,[seconds,now])) throw Error('Invalid completion.');
-    // Tomorrow's Daily is available in the evening. Reject implausible future dates.
+    // Tomorrow's puzzle is available in the evening. Reject implausible future dates.
     if (date > S.nytDate(new Date(now + 86400000))) throw Error('Invalid puzzle date.');
-    const state = await read(), game = message.game === 'sudoku-hard' ? 'sudoku' : 'crossword';
+    const state = await read();
     const {settings} = await chrome.storage.local.get('settings');
     const choosing = message.action === 'completion-choice';
     if (choosing && typeof message.keep !== 'boolean') throw Error('Invalid choice.');
-    if (!choosing && (!state.preferences.enabled || settings?.disabled?.includes(game))) return {saved:false,enabled:false};
+    if (!choosing && (!state.preferences.enabled || settings?.disabled?.includes('sudoku'))) return {saved:false,enabled:false};
     if (message.action === 'offer') return {enabled:true,recorded:!!state.data.records[key],seconds:state.data.records[key] || null,deleted:state.data.edits[key]?.[0] === 0};
     // Read the latest synced revision before replacing a day, but do not write
     // anything to sync until the completion has been saved locally.

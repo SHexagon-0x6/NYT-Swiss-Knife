@@ -1,5 +1,9 @@
 # Changes
 
+## 0.7.8
+
+- Stats: remove Daily Crossword time recording, since NYT already keeps its own Crossword stats. Only Hard Sudoku times are recorded now; crossword times saved by earlier versions stay in your history and export.
+
 ## 0.7.7
 
 - Popup: each game name links to its puzzle (Sudoku: nytimes.com/puzzles/sudoku, Crossword: nytimes.com/crosswords).
