@@ -56,6 +56,8 @@ async function reconcile() {
     return {...await read(),sync};
   }
 }
+// Give this sender.tab.url: NYT's Easy, Medium and Hard buttons change the route
+// without loading a document, and sender.url keeps the URL the document loaded with.
 function eligible(url, game) {
   try {
     const u = new URL(url);
@@ -67,7 +69,7 @@ async function dispatch(message, sender) {
   if (sender.id !== chrome.runtime.id) throw Error('Unknown sender.');
   const popup = sender.url === chrome.runtime.getURL('popup.html');
   if (message.action === 'puzzle-date') {
-    if (!sender.tab || sender.tab.incognito || !eligible(sender.url,message.game) || !S.validDate(message.date) || message.date > S.nytDate(new Date(Date.now()+86400000))) throw Error('Invalid puzzle date.');
+    if (!sender.tab || sender.tab.incognito || !eligible(sender.tab.url,message.game) || !S.validDate(message.date) || message.date > S.nytDate(new Date(Date.now()+86400000))) throw Error('Invalid puzzle date.');
     const {puzzleDates} = await read();
     if (puzzleDates[message.game] !== message.date) {
       puzzleDates[message.game] = message.date;
@@ -76,12 +78,12 @@ async function dispatch(message, sender) {
     return puzzleDates;
   }
   if (message.action === 'view') {
-    if (!sender.tab || sender.tab.incognito || !Object.keys(S.GAMES).some(game => eligible(sender.url,game))) throw Error('Unsupported puzzle.');
+    if (!sender.tab || sender.tab.incognito || !Object.keys(S.GAMES).some(game => eligible(sender.tab.url,game))) throw Error('Unsupported puzzle.');
     const state = await reconcile();
     return {...state.data,puzzleDates:state.puzzleDates};
   }
   if (message.action === 'save-day' || message.action === 'delete-day') {
-    if (!popup && (!sender.tab || sender.tab.incognito || !Object.keys(S.GAMES).some(game => eligible(sender.url,game)))) throw Error('Unsupported page.');
+    if (!popup && (!sender.tab || sender.tab.incognito || !Object.keys(S.GAMES).some(game => eligible(sender.tab.url,game)))) throw Error('Unsupported page.');
     const seconds = message.action === 'delete-day' ? 0 : message.seconds, key = `${message.game}:${message.date}`;
     if (!Object.hasOwn(S.GAMES,message.game) || !S.validRecord(key,seconds || 1) || !Number.isInteger(seconds) || seconds < 0 || message.action === 'save-day' && !seconds || message.date > S.nytDate(new Date(Date.now()+86400000))) throw Error('Invalid time.');
     const state = await reconcile();
@@ -98,7 +100,7 @@ async function dispatch(message, sender) {
     return (await reconcile()).data;
   }
   if (message.action === 'record' || message.action === 'offer' || message.action === 'completion-choice') {
-    if (!sender.tab || sender.tab.incognito || !eligible(sender.url,message.game)) throw Error('Unsupported puzzle.');
+    if (!sender.tab || sender.tab.incognito || !eligible(sender.tab.url,message.game)) throw Error('Unsupported puzzle.');
     const date = message.date, seconds = message.seconds, now = Date.now();
     const key = `${message.game}:${date}`;
     if (!S.validRecord(key,[seconds,now])) throw Error('Invalid completion.');

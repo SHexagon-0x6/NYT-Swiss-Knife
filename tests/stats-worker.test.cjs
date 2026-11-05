@@ -12,9 +12,10 @@ function worker() {
   const chrome = {runtime:{id:'test',getURL:p => 'chrome-extension://test/'+p,onMessage:event('message'),onStartup:event('startup'),onInstalled:event('installed')},
     storage:{local:area('local'),sync:area('sync'),onChanged:event('changed')}};
   vm.runInNewContext(fs.readFileSync(require.resolve('../stats-worker.js'),'utf8'),{chrome,MarginStats:S,importScripts(){},URL,Date,console,setTimeout,clearTimeout});
-  const page = {id:'test',url:'chrome-extension://test/popup.html',documentId:'popup-document'}, tab = {id:'test',url:'https://www.nytimes.com/puzzles/sudoku/hard',tab:{incognito:false}};
+  const page = {id:'test',url:'chrome-extension://test/popup.html',documentId:'popup-document'}, tab = {id:'test',url:'https://www.nytimes.com/puzzles/sudoku/hard',tab:{url:'https://www.nytimes.com/puzzles/sudoku/hard',incognito:false}};
+  const at = url => ({...tab,url,tab:{...tab.tab,url}});
   const request = (action, values = {}, sender = page) => new Promise(resolve => listeners.message({type:'swiss-stats',action,...values},sender,value => resolve(structuredClone(value))));
-  return {data,flags,request,page,tab,listeners};
+  return {data,flags,request,page,tab,at,listeners};
 }
 const solve = {game:'sudoku-hard',date:'2026-10-01',seconds:500};
 test('declining a repeat restores its prior time across reopenings, checkbox toggles and sync', async () => {
@@ -60,18 +61,18 @@ test('an old completion cannot undo a later calendar edit, another solve, or cle
   assert.equal(stale.data.seconds,700);assert.equal(stale.data.accepted,false);
   await f.request('clear');await f.request('completion-choice',{...solve,seconds:700,keep:false},f.tab);
   assert.deepEqual(f.data.local.statsLocalV1.records,{});
-  for (const sender of [f.page,{...f.tab,tab:{incognito:true}},{...f.tab,url:'https://example.com/'}]) assert.equal((await f.request('completion-choice',{...solve,keep:false},sender)).ok,false);
+  for (const sender of [f.page,{...f.tab,tab:{incognito:true}},f.at('https://example.com/')]) assert.equal((await f.request('completion-choice',{...solve,keep:false},sender)).ok,false);
 });
 test('calendar dates come from eligible NYT pages and remain local without recording a solve', async () => {
   const f = worker();
   assert((await f.request('puzzle-date',{game:'sudoku-hard',date:'2026-10-31'},f.tab)).ok);
-  const crossword = {...f.tab,url:'https://www.nytimes.com/crosswords/game/daily/2026/10/30'};
+  const crossword = f.at('https://www.nytimes.com/crosswords/game/daily/2026/10/30');
   assert.equal((await f.request('puzzle-date',{game:'crossword-daily',date:'2026-10-30'},crossword)).ok,false);
   const expected = {'sudoku-hard':'2026-10-31'};
   assert.deepEqual(f.data.local.statsPuzzleDatesV1,expected);
   assert.equal(f.data.local.statsLocalV1,undefined);assert.deepEqual(f.data.sync,{});
   assert.deepEqual((await f.request('get')).data.puzzleDates,expected);
-  for (const sender of [f.page,{...f.tab,tab:{incognito:true}},{...f.tab,url:'https://example.com/'}]) assert.equal((await f.request('puzzle-date',{game:'sudoku-hard',date:'2026-10-31'},sender)).ok,false);
+  for (const sender of [f.page,{...f.tab,tab:{incognito:true}},f.at('https://example.com/')]) assert.equal((await f.request('puzzle-date',{game:'sudoku-hard',date:'2026-10-31'},sender)).ok,false);
   assert.equal((await f.request('puzzle-date',{game:'crossword-daily',date:'2026-10-31'},f.tab)).ok,false);
   assert.equal((await f.request('puzzle-date',{game:'sudoku-hard',date:'2026-02-30'},f.tab)).ok,false);
 });
@@ -121,11 +122,26 @@ test('reopening the same result preserves manual corrections but a new completio
   assert.equal((await f.request('record',{...solve,seconds:700},f.tab)).data.seconds,700);
   assert.equal(S.unpack(f.data.sync).records['sudoku-hard:2026-10-01'],700);
 });
+test('Sudoku route changes inside one document follow the tab, not the URL it loaded with', async () => {
+  // Easy, Medium and Hard are buttons: Chrome keeps sender.url at /puzzles/sudoku.
+  const f = worker(), hard = {...f.tab,url:'https://www.nytimes.com/puzzles/sudoku'};
+  assert.equal((await f.request('view',{},hard)).ok,true);
+  assert.equal((await f.request('puzzle-date',{game:'sudoku-hard',date:solve.date},hard)).ok,true);
+  assert.equal((await f.request('record',solve,hard)).data.seconds,500);
+  assert.equal((await f.request('completion-choice',{...solve,keep:false},hard)).data.saved,false);
+  assert.equal((await f.request('save-day',solve,hard)).data.records['sudoku-hard:2026-10-01'],500);
+  assert.deepEqual((await f.request('delete-day',solve,hard)).data.records,{});
+  const easy = {...f.tab,tab:{...f.tab.tab,url:'https://www.nytimes.com/puzzles/sudoku/easy'}};
+  for (const [action,values] of [['view',{}],['puzzle-date',{game:'sudoku-hard',date:solve.date}],['record',solve],['completion-choice',{...solve,keep:true}],['save-day',solve],['delete-day',solve]]) {
+    assert.equal((await f.request(action,values,easy)).ok,false,action);
+  }
+  assert.deepEqual(f.data.local.statsLocalV1.records,{});
+});
 test('disabled games, paused capture, crosswords, foreign pages and Incognito cannot save', async () => {
   const f = worker();
-  for (const sender of [{...f.tab,url:'https://example.com/puzzles/sudoku/hard'},{...f.tab,url:'https://www.nytimes.com/puzzles/sudoku/easy'},{...f.tab,tab:{incognito:true}},f.page,{...f.tab,id:'bad'}]) assert.equal((await f.request('record',solve,sender)).ok,false);
+  for (const sender of [f.at('https://example.com/puzzles/sudoku/hard'),f.at('https://www.nytimes.com/puzzles/sudoku/easy'),{...f.tab,tab:{incognito:true}},f.page,{...f.tab,id:'bad'}]) assert.equal((await f.request('record',solve,sender)).ok,false);
   for (const url of ['https://www.nytimes.com/crosswords/game/daily','https://www.nytimes.com/crosswords/game/daily/2026/10/01','https://www.nytimes.com/games/crosswords/daily','https://www.nytimes.com/crosswords/game/mini']) {
-    const crossword = {...f.tab,url};
+    const crossword = f.at(url);
     for (const action of ['record','offer','completion-choice']) assert.equal((await f.request(action,{...solve,game:'crossword-daily',keep:true},crossword)).ok,false,`${action} ${url}`);
     assert.equal((await f.request('save-day',{...solve,game:'crossword-daily'},crossword)).ok,false,`save-day ${url}`);
     assert.equal((await f.request('view',{},crossword)).ok,false,`view ${url}`);
@@ -139,7 +155,7 @@ test('disabled games, paused capture, crosswords, foreign pages and Incognito ca
 test('game calendars can read history but cannot change global preferences or clear it', async () => {
   const f = worker();await f.request('record',solve,f.tab);
   assert.equal((await f.request('view',{},f.tab)).data.records['sudoku-hard:2026-10-01'],500);
-  assert.equal((await f.request('view',{}, {...f.tab,url:'https://example.com/'})).ok,false);
+  assert.equal((await f.request('view',{}, f.at('https://example.com/'))).ok,false);
   assert.equal((await f.request('view',{}, {...f.tab,tab:{incognito:true}})).ok,false);
   assert.equal((await f.request('preferences',{enabled:false},f.tab)).ok,false);
 });
@@ -208,7 +224,7 @@ test('calendar edits and deletes sync without stale times reappearing', async ()
   assert((await f.request('save-day',{...solve,seconds:736})).ok);
   assert.equal(S.unpack(f.data.sync).records['sudoku-hard:2026-10-01'],736);
   assert.equal(f.data.local.statsLocalV1.totals['sudoku-hard'].sum,736);
-  for (const sender of [{...f.tab,url:'https://example.com/'},{...f.tab,tab:{incognito:true}}]) assert.equal((await f.request('delete-day',solve,sender)).ok,false);
+  for (const sender of [f.at('https://example.com/'),{...f.tab,tab:{incognito:true}}]) assert.equal((await f.request('delete-day',solve,sender)).ok,false);
 });
 test('the extension update handler preserves records, manual revisions, notes and preferences', async () => {
   const f = worker();await f.request('record',solve,f.tab);await f.request('save-day',{...solve,seconds:736});

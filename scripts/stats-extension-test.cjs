@@ -240,6 +240,15 @@ const deadline = setTimeout(() => {console.error('Stats extension checks timed o
   assert.equal((await local())['sudoku-hard:2026-11-02'],736);
   assert.equal(await evaluate(stats,`chrome.storage.local.get('puzzle:retention-check').then(d=>d['puzzle:retention-check'].scratch)`),'keep');
   report('Reopening the popup preserves recorded times and puzzle notes');
+  // Easy, Medium and Hard are buttons, so reaching Hard loads no new document.
+  await navigate('/puzzles/sudoku');
+  await evaluate(game,`document.querySelector('.pz-game-date').textContent='October 29, 2026';history.pushState({},'','/puzzles/sudoku/hard')`);
+  await until(() => inside(game,'return !!this.querySelector("button")',logoSelector),'toolbar logo after route change');
+  await inside(game,'this.querySelector("button").dispatchEvent(new MouseEvent("click",{bubbles:true,detail:1}))',logoSelector);
+  await until(() => inside(game,'return this.querySelector(".popover-status").textContent === ""',panelSelector),'calendar after route change');
+  await evaluate(game,`document.getElementById('result').hidden=false`);
+  await until(async () => (await local())['sudoku-hard:2026-10-29'] === 754,'time saved after route change');
+  report('Reaching Hard without a page load opens the calendar and saves the time');
   await navigate('/puzzles/sudoku/hard');
   await evaluate(stats,'chrome.runtime.reload()').catch(() => {});
   await inside(game,'this.querySelector("button").click()',logoSelector);

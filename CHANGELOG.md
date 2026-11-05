@@ -1,5 +1,9 @@
 # Changes
 
+## 0.7.9
+
+- Stats: fix "Could not load your stats. Close and reopen to retry." after opening Sudoku and choosing Hard, which needed a tab refresh to clear. Finish times from that visit now save too.
+
 ## 0.7.8
 
 - Stats: remove Daily Crossword time recording, since NYT already keeps its own Crossword stats. Only Hard Sudoku times are recorded now; crossword times saved by earlier versions stay in your history and export.
