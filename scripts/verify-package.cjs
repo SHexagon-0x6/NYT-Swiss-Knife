@@ -46,7 +46,8 @@ const deadline=setTimeout(()=>{fail(Error('Upload verification timed out'));chro
     for(let attempt=0;attempt<50;attempt++){
       const r=await send('Runtime.evaluate',{expression:`({version:globalThis.chrome?.runtime?.getManifest().version,loaded:document.readyState==='complete',images:[...document.images].map(i=>i.complete&&i.naturalWidth>0),title:document.title,text:document.body?.innerText,styles:[...document.styleSheets].length})`,returnByValue:true},sessionId);
       result=r.result.value;
-      if(result?.loaded&&result.version)break;
+      const ready=v=>v?.version===manifest.version&&v.loaded&&v.title?.includes('NYT Games Swiss Knife')&&v.styles&&v.images?.length&&v.images.every(Boolean);
+      if(ready(result))break;
       await new Promise(resolve=>setTimeout(resolve,100));
     }
     if(result?.version!==manifest.version||!result.loaded||!result.title?.includes('NYT Games Swiss Knife')||!result.styles||!result.images.length||!result.images.every(Boolean))throw Error(page+' or its bundled resources failed to load');
