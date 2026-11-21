@@ -259,5 +259,5 @@ const deadline = setTimeout(() => {console.error('Stats extension checks timed o
   report('An invalidated tab displays a reconnect action instead of a silent missed result');
 
 })().catch(error => {console.error(error.stack);process.exitCode=1;}).finally(async () => {
-  clearTimeout(deadline);await send('Browser.close').catch(() => {});setTimeout(() => {chrome.kill();rmSync(profile,{recursive:true,force:true});},100);
+  clearTimeout(deadline);await send('Browser.close').catch(() => {});setTimeout(() => {chrome.kill();try{rmSync(profile,{recursive:true,force:true,maxRetries:5,retryDelay:50});}catch{}},100);
 });

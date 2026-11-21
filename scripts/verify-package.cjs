@@ -53,5 +53,5 @@ const deadline=setTimeout(()=>{fail(Error('Upload verification timed out'));chro
     console.log(`PASS Packaged ${page}, styles and all images load in Chrome (v${manifest.version})`);
   }
 })().catch(error=>{console.error(error.message);process.exitCode=1;}).finally(async()=>{
-  clearTimeout(deadline);await send('Browser.close').catch(()=>{});setTimeout(()=>{chrome.kill();rmSync(profile,{recursive:true,force:true});rmSync(unpacked,{recursive:true,force:true});},100);
+  clearTimeout(deadline);await send('Browser.close').catch(()=>{});setTimeout(()=>{chrome.kill();for(const dir of [profile,unpacked])try{rmSync(dir,{recursive:true,force:true,maxRetries:5,retryDelay:50});}catch{}},100);
 });

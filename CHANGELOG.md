@@ -1,6 +1,6 @@
 # Changes
 
-## 0.7.10
+## 0.8.0
 
 - Crossword: fix A–Z letter trials and Notes on The Midi, including rectangular, shaped, and colored grids.
 - Sudoku: fix Colored candidate (both color and italic) not working after NYT updated the Normal and Candidate mode switches.
