@@ -423,7 +423,7 @@
       return true;
     })){placeSettings();scheduleRefresh();}
   });
-  observer.observe(document.documentElement,{subtree:true,childList:true,characterData:true,attributes:true,attributeFilter:['class','data-state','data-animation','aria-pressed','data-selected','data-puzzle-id','open','hidden','aria-modal']});
+  observer.observe(document.documentElement,{subtree:true,childList:true,characterData:true,attributes:true,attributeFilter:['class','data-state','data-animation','aria-pressed','aria-checked','data-selected','data-puzzle-id','open','hidden','aria-modal']});
   const interval=setInterval(scheduleRefresh,1500);
   if(extension)chrome.storage.onChanged.addListener((changes,area)=>{
     if(area!=='local')return;

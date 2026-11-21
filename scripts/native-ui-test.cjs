@@ -110,10 +110,11 @@ const deadline=setTimeout(()=>{console.error('Native browser test deadline');chr
     assert(placement.auto&&placement.next,'Sudoku keeps Auto candidate in place with Colored candidate right below it');
     const ownFont=await inside('[data-margin-inline="sudoku-colored"]',`function(){return getComputedStyle(this.querySelector('.colored-row')).fontFamily}`);
     assert(ownFont===placement.font,'Colored candidate uses the same font as Auto candidate');
+    const candidateActive=`(()=>{const n=document.querySelector('[data-testid="candidate-mode"]');return(n?.getAttribute('aria-checked')??n?.getAttribute('aria-pressed'))==='true'})()`;
     await nativeClick('.su-board .su-cell');await key('F8','F8');await wait(250);
-    assert(await inside('[data-margin-inline="sudoku-colored"]',`function(){return this.querySelector('input').checked}`)&&await evaluate(`document.querySelector('[data-testid="candidate-mode"]').getAttribute('aria-pressed')==='true'`),'Sudoku configured hotkey turns on Colored candidate');
+    assert(await inside('[data-margin-inline="sudoku-colored"]',`function(){return this.querySelector('input').checked}`)&&await evaluate(candidateActive),'Sudoku configured hotkey turns on Colored candidate');
     await key('F8','F8');await wait(250);
-    assert(!await inside('[data-margin-inline="sudoku-colored"]',`function(){return this.querySelector('input').checked}`)&&await evaluate(`document.querySelector('[data-testid="candidate-mode"]').getAttribute('aria-pressed')==='true'`),'Sudoku hotkey turns Colored candidate off and keeps Candidate');
+    assert(!await inside('[data-margin-inline="sudoku-colored"]',`function(){return this.querySelector('input').checked}`)&&await evaluate(candidateActive),'Sudoku hotkey turns Colored candidate off and keeps Candidate');
    }
    if(game==='crossword'){
     const pencil=await evaluate(`document.querySelector('button[aria-label="Pencil"]').innerHTML`);await key('F8','F8');const changed=await evaluate(`document.querySelector('button[aria-label="Pencil"]').innerHTML`);assert(pencil!==changed,'Crossword custom hotkey toggles native Pencil');await key('F8','F8');

@@ -263,6 +263,65 @@
     await until(() => fixture.textContent.includes('Congratulations!'), 'delayed completion did not appear');
     assert(letter(1)==='C' && writes.map(write=>write.value).join('')==='ABC' && host().dataset.state!=='running' && !ctx.noticeText, 'a slow result screen overwrote the accepted solution or showed a false error');
   });
+  await run('rectangular Midi ARIA SVG grids with external cutout and colored cells support A–Z', async () => {
+    setup({ inputEvent: 'keypress', filled: true, incorrectResults: true, completeAt: 'C' });
+    adapter.destroy();
+    const ns = 'http://www.w3.org/2000/svg';
+    const svg = (tag, attrs) => { const node = document.createElementNS(ns, tag); for (const [name, value] of Object.entries(attrs)) node.setAttribute(name, String(value)); return node; };
+    const rows = 3, cols = 4;
+    board = svg('svg', { class: 'xwd__svg', width: cols * 60, height: rows * 60 });
+    const grid = svg('g', { role: 'grid', 'aria-rowcount': rows, 'aria-colcount': cols });
+    cells = [];
+    for (let r = 0; r < rows; r++) {
+      const rowNode = svg('g', { role: 'row' });
+      for (let c = 0; c < cols; c++) {
+        const index = r * cols + c, x = c * 60, y = r * 60;
+        const external = index === 0, coloredBlock = index === 11;
+        const playable = !external && !coloredBlock;
+        const cell = svg('g', {
+          class: 'xwd__cell',
+          role: playable ? 'gridcell' : 'presentation',
+          'data-testid': 'cell-g',
+          'data-margin-crossword-cell': '',
+          ...(playable ? { 'aria-rowindex': r + 1, 'aria-colindex': c + 1, 'aria-selected': String(index === 1), tabindex: index === 1 ? 0 : -1 } : { 'aria-hidden': 'true' })
+        });
+        // External cutout uses non-block white/none rect; coloredBlock uses blue Midi fill; index 1 uses dark theme fill.
+        const fill = external ? 'none' : coloredBlock ? '#7ca8f0' : index === 1 ? '#181818' : '#ffffff';
+        const rect = svg('rect', { x, y, width: 60, height: 60, fill, class: `${coloredBlock ? 'xwd__cell--block' : 'xwd__cell--cell'} xwd__cell--nested` });
+        cell.append(rect);
+        if (playable) {
+          const corner = svg('text', { x: x + 4, y: y + 14, 'text-anchor': 'start', 'data-testid': 'cell-text' });
+          corner.textContent = index === 1 ? 'GO' : String(index);
+          const hidden = svg('text', { class: 'xwd__cell--hidden' });
+          hidden.style.display = 'none';
+          const value = svg('text', { x: x + 30, y: y + 40, 'text-anchor': 'middle', 'data-testid': 'cell-text', 'data-cycle-test-value': '' });
+          value.append(hidden, document.createTextNode(index === 1 ? '' : 'X'));
+          cell.append(corner, value);
+          cell.addEventListener('click', () => {
+            if (playable) {
+              selected = index;
+              cells.forEach((n, i) => { if (n.getAttribute('role') === 'gridcell') n.setAttribute('aria-selected', String(i === index)); });
+            }
+          });
+        }
+        cells.push(cell);
+        rowNode.append(cell);
+      }
+      grid.append(rowNode);
+    }
+    // Decorative board-g-group path crossing cell centers, like NYT SVG boards.
+    const boardGroup = svg('g', { 'data-testid': 'board-g-group' });
+    boardGroup.append(svg('path', { d: 'M0,0 L240,180', stroke: '#000', 'stroke-width': 2, fill: 'none' }));
+    board.append(grid, boardGroup);
+    fixture.replaceChildren(board);
+    selected = 1;
+    adapter = MarginGames.crossword.mount(ctx);
+    assert(!host().hidden && toggle()?.getAttribute('aria-label') === 'Try A–Z', 'Midi rectangular/cutout/colored board hid A–Z');
+    toggle().click();
+    await until(() => fixture.textContent.includes('Congratulations!'), 'Midi last-square A–Z did not reach Congratulations', 3500);
+    assert(writes.map(w => w.value).join('') === 'ABC' && writes.every(w => w.index === 1), 'Midi A–Z spilled or skipped letters');
+    assert(options.dismissed === 2 && letter(1) === 'C' && host().dataset.state !== 'running', 'Midi A–Z did not dismiss incorrect results and stop on solve');
+  });
   await run('destroy cancels future native edits and removes the cycle control', async () => {
     setup(); toggle().click(); await until(() => writes.length === 1, 'A was not typed'); adapter.destroy(); adapter = null; await wait(850);
     assert(writes.length === 1 && !host(), 'destroy left the cycle or its native input timer active');

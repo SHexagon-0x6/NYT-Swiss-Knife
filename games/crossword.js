@@ -22,11 +22,15 @@
     const explicit = (node.getAttribute('aria-label') || '').match(/\b(?:clue\s+)?number\s+(\d+)\b/i);
     return explicit ? Number(explicit[1]) : null;
   }
-  function isBlock(node, rect) {
-    if (/^(?:true|1)$/.test(node.getAttribute('data-block') || '') || /^(?:true|1)$/.test(node.getAttribute('data-is-block') || '') || /^(?:block|black)$/.test(node.getAttribute('data-cell-type') || '')) return true;
+  function explicitlyBlocked(node, rect) {
+    if (/^(?:true|1)$/.test(node.getAttribute('data-block') || '') || /^(?:true|1)$/.test(node.getAttribute('data-is-block') || '') || /^(?:block|black|external|void)$/i.test(node.getAttribute('data-cell-type') || '')) return true;
     if (/\b(?:black|blocked)\s+(?:square|cell)\b/i.test(node.getAttribute('aria-label') || '')) return true;
-    if (/(?:^|[\s_-])(?:block|black|blocked)(?:[\s_-]|$)/i.test(`${node.getAttribute('class') || ''} ${rect?.getAttribute('class') || ''}`)) return true;
-    if (!rect && (node.getAttribute('data-block') === 'false' || node.getAttribute('data-is-block') === 'false' || node.getAttribute('role') === 'gridcell')) return false;
+    return /(?:^|[\s_-])(?:block|black|blocked|external|void)(?:[\s_-]|$)/i.test(`${node.getAttribute('class') || ''} ${rect?.getAttribute('class') || ''}`);
+  }
+  function isBlock(node, rect) {
+    if (explicitlyBlocked(node, rect)) return true;
+    if (node.getAttribute('data-block') === 'false' || node.getAttribute('data-is-block') === 'false' || node.getAttribute('role') === 'gridcell') return false;
+    if (node.getAttribute('role') === 'presentation') return true;
     const color = rect ? getComputedStyle(rect).fill : getComputedStyle(node).backgroundColor;
     const alpha = color.match(/^rgba\([^)]*,\s*([\d.]+)\s*\)$/);
     if (alpha && Number(alpha[1]) < .95) return false;
@@ -42,12 +46,12 @@
     if (!cells.length || cells.some(cell => !Number.isInteger(cell.row) || !Number.isInteger(cell.col))) return null;
     const minRow = Math.min(...cells.map(cell => cell.row)), minCol = Math.min(...cells.map(cell => cell.col));
     cells.forEach(cell => { cell.row -= minRow; cell.col -= minCol; });
-    const size = Math.max(...cells.map(cell => cell.row)) + 1;
-    if (size < 2 || size > 30 || Math.max(...cells.map(cell => cell.col)) + 1 !== size || cells.length !== size * size) return null;
-    const indices = new Set(cells.map(cell => cell.row * size + cell.col));
+    const rows = Math.max(...cells.map(cell => cell.row)) + 1, cols = Math.max(...cells.map(cell => cell.col)) + 1;
+    if (rows < 2 || rows > 35 || cols < 2 || cols > 35 || cells.length !== rows * cols) return null;
+    const indices = new Set(cells.map(cell => cell.row * cols + cell.col));
     if (indices.size !== cells.length) return null;
-    cells.sort((a, b) => a.row * size + a.col - b.row * size - b.col);
-    return { cells, root, size };
+    cells.sort((a, b) => a.row * cols + a.col - b.row * cols - b.col);
+    return cells.some(cell => !cell.block) ? { cells, root, rows, cols } : null;
   }
   function geometricGrid(nodes, root) {
     const cells = nodes.filter(rendered).map(node => {
@@ -55,8 +59,7 @@
       const box = rect?.getBoundingClientRect();
       return { node, rect, box, number: numberOf(node), block: isBlock(node, rect) };
     });
-    const size = Math.sqrt(cells.length);
-    if (!Number.isInteger(size) || size < 2 || size > 30 || cells.some(cell => !cell.box || cell.box.width < 4 || cell.box.height < 4)) return null;
+    if (cells.length < 4 || cells.some(cell => !cell.box || cell.box.width < 4 || cell.box.height < 4)) return null;
     const width = cells[0].box.width, height = cells[0].box.height;
     if (width / height < .8 || width / height > 1.2 || cells.some(cell => Math.abs(cell.box.width - width) > width * .2 || Math.abs(cell.box.height - height) > height * .2)) return null;
     function positions(values, tolerance) {
@@ -66,11 +69,12 @@
     }
     const xs = positions(cells.map(cell => cell.box.left), width * .15);
     const ys = positions(cells.map(cell => cell.box.top), height * .15);
-    if (xs.length !== size || ys.length !== size) return null;
+    const rows = ys.length, cols = xs.length;
+    if (rows < 2 || rows > 35 || cols < 2 || cols > 35) return null;
     cells.forEach(cell => { cell.col = xs.findIndex(value => Math.abs(value - cell.box.left) <= width * .15); cell.row = ys.findIndex(value => Math.abs(value - cell.box.top) <= height * .15); });
-    if (new Set(cells.map(cell => cell.row * size + cell.col)).size !== cells.length) return null;
-    cells.sort((a, b) => a.row * size + a.col - b.row * size - b.col);
-    return { cells, root, size };
+    if (cells.some(cell => cell.row < 0 || cell.col < 0) || new Set(cells.map(cell => cell.row * cols + cell.col)).size !== cells.length || cells.length < rows * cols * .5) return null;
+    cells.sort((a, b) => a.row * cols + a.col - b.row * cols - b.col);
+    return cells.some(cell => !cell.block) ? { cells, root, rows, cols } : null;
   }
   function readGrid() {
     const preview = document.querySelector('[data-margin-game="crossword"]');
@@ -94,25 +98,26 @@
     return null;
   }
   function nativeAriaGrid(root) {
-    const size = Number(root.getAttribute('aria-rowcount'));
-    if (!Number.isInteger(size) || size < 2 || size > 30 || Number(root.getAttribute('aria-colcount')) !== size) return null;
+    const rowCount = Number(root.getAttribute('aria-rowcount')), colCount = Number(root.getAttribute('aria-colcount'));
+    if (!Number.isInteger(rowCount) || !Number.isInteger(colCount) || rowCount < 2 || rowCount > 35 || colCount < 2 || colCount > 35) return null;
     const rows = Array.from(root.querySelectorAll('[role="row"]')).filter(row => row.closest('[role="grid"]') === root);
-    if (rows.length !== size) return null;
+    if (rows.length !== rowCount) return null;
     const cells = [];
-    for (let row = 0; row < size; row++) {
-      const nodes = Array.from(rows[row].children).filter(node => node.matches('[data-testid="cell-g"]'));
-      if (nodes.length !== size) return null;
-      for (let col = 0; col < size; col++) {
+    for (let row = 0; row < rowCount; row++) {
+      const byTestId = Array.from(rows[row].children).filter(node => node.matches('[data-testid="cell-g"]'));
+      const nodes = byTestId.length === colCount ? byTestId : Array.from(rows[row].children).filter(node => node.matches('[role="gridcell"],[role="presentation"]'));
+      if (nodes.length !== colCount) return null;
+      for (let col = 0; col < colCount; col++) {
         const node = nodes[col], role = node.getAttribute('role'), rect = node.querySelector('rect');
-        if (!rendered(node) || !rect) return null;
-        const block = isBlock(node, rect);
         if (role === 'gridcell') {
-          if (block || Number(node.getAttribute('aria-rowindex')) !== row + 1 || Number(node.getAttribute('aria-colindex')) !== col + 1) return null;
-        } else if (role !== 'presentation' || !block) return null;
-        cells.push({ node, row, col, block, number: block ? null : numberOf(node) });
+          if (!rendered(node) || !rect || explicitlyBlocked(node, rect) || Number(node.getAttribute('aria-rowindex')) !== row + 1 || Number(node.getAttribute('aria-colindex')) !== col + 1) return null;
+          cells.push({ node, row, col, block: false, number: numberOf(node) });
+        } else if (role === 'presentation') {
+          cells.push({ node, row, col, block: true, number: null });
+        } else return null;
       }
     }
-    return { cells, root, size };
+    return cells.some(cell => !cell.block) ? { cells, root, rows: rowCount, cols: colCount } : null;
   }
   function visuallyReadable(node) {
     if (!rendered(node)) return false;
@@ -131,6 +136,8 @@
     const input=cell.node.matches('input')?cell.node:cell.node.querySelector('input');if(input)return input.value.trim().toUpperCase();
     const ownText=node=>clean([...node.childNodes].filter(child=>child.nodeType===3).map(child=>child.textContent).join('')).toUpperCase();
     const value=cell.node.querySelector('[data-margin-crossword-value],.crossword-letter,[data-testid="cell-value"],.xwd__cell--letter');if(value)return ownText(value);
+    const centered=[...cell.node.querySelectorAll('text[text-anchor="middle"]')].filter(node=>!node.closest('[hidden],.xwd__cell--hidden')&&getComputedStyle(node).display!=='none'&&getComputedStyle(node).visibility!=='hidden');
+    if(centered.length===1){const middle=ownText(centered[0]);if(middle===''||/^[A-Z]+$/.test(middle))return middle;}
     const letters=[...cell.node.querySelectorAll('text,span')].filter(node=>rendered(node)&&!node.closest('.xwd__cell--hidden')).map(ownText).filter(text=>/^[A-Z]+$/.test(text));
     if(letters.length===1)return letters[0];
     const text=ownText(cell.node);return /^[A-Z]$/.test(text)?text:letters.length?null:'';
@@ -296,7 +303,7 @@
     for (const name of ['keydown', 'keyup', 'keypress', 'pointerdown', 'pointerup', 'click']) listen(root, name, event => event.stopPropagation());
 
     function signature(value) {
-      return JSON.stringify([location.href, document.querySelector('[data-puzzle-id]')?.getAttribute('data-puzzle-id'), value.size, value.cells.map(cell => [cell.row, cell.col, cell.number, cell.block])]);
+      return JSON.stringify([location.href, document.querySelector('[data-puzzle-id]')?.getAttribute('data-puzzle-id'), value.rows, value.cols, value.cells.map(cell => [cell.row, cell.col, cell.number, cell.block])]);
     }
     function selectedCell(value = grid) {
       return value?.cells.find(cell => !cell.block && (cell.node.matches(SELECTED) || cell.node.querySelector(SELECTED)));
@@ -329,10 +336,10 @@
       if (!cell || cell.block || !visuallyReadable(cell.node) || modalOpen() || document.visibilityState === 'hidden') return false;
       if (cell.node.closest('[inert],[aria-disabled="true"],[data-readonly="true"]') || cell.node.matches(':disabled,[readonly],[aria-readonly="true"]')) return false;
       if (cell.node.querySelector('input:disabled,input[readonly],input[aria-readonly="true"]')) return false;
-      const rect = cell.node.getBoundingClientRect(), x = rect.left + rect.width / 2, y = rect.top + rect.height / 2;
-      if (x < 0 || x >= innerWidth || y < 0 || y >= innerHeight) return false;
-      const hit = document.elementFromPoint(x, y);
-      return hit === cell.node || cell.node.contains(hit);
+      const box = (cell.node.querySelector('rect') || cell.node).getBoundingClientRect(), x = box.left + box.width / 2, y = box.top + box.height / 2;
+      if (!box.width || !box.height || x < 0 || x >= innerWidth || y < 0 || y >= innerHeight) return false;
+      const hit = document.elementFromPoint(x, y), svg = cell.node.ownerSVGElement;
+      return hit === cell.node || cell.node.contains(hit) || !!(svg && svg.contains(hit) && hit.closest('[data-testid="board-g-group"]'));
     }
     const letterOf=squareLetter;
     function paint() {
@@ -347,7 +354,8 @@
       place();
     }
     function place() {
-      const rebus=ctx.nativeControl?.(/^Rebus(?: |$)/i)||[...document.querySelectorAll('button')].find(node=>rendered(node)&&/^rebus$/i.test(node.getAttribute('aria-label')||node.textContent.trim()));
+      const rebus=ctx.nativeControl?.(/^Rebus(?: |$)/i)||[...document.querySelectorAll('button')].find(node=>rendered(node)&&/^rebus$/i.test(node.getAttribute('aria-label')||node.textContent.trim()))||
+        [...document.querySelectorAll('.xwd__toolbar--tools button')].find(node=>rendered(node)&&/^(?:clear|reveal|check|pencil)$/i.test(node.getAttribute('aria-label')||node.textContent.trim()));
       const anchor=rebus?.closest('li')||rebus;
       if(anchor){
         if(host.parentNode!==anchor.parentNode||host.nextSibling!==anchor)anchor.before(host);
@@ -359,7 +367,8 @@
       }
       host.style.removeProperty('--toolbar-width');
       if(host.hidden||!grid?.cells.length)return;
-      const boxes=grid.cells.map(cell=>cell.node.getBoundingClientRect());
+      const boxes=grid.cells.filter(cell=>!cell.block&&rendered(cell.node)).map(cell=>(cell.node.querySelector('rect')||cell.node).getBoundingClientRect());
+      if(!boxes.length)return;
       const top=Math.min(...boxes.map(box=>box.top)),left=Math.min(...boxes.map(box=>box.left));
       Object.assign(host.style,{position:'fixed',zIndex:'1',left:`${Math.max(8,left)}px`,top:`${Math.max(8,top-40)}px`});
     }
@@ -374,7 +383,7 @@
       try { action(); } finally { replaying = false; }
     }
     function select(cell) {
-      const rect = cell.node.getBoundingClientRect();
+      const rect = (cell.node.querySelector('rect') || cell.node).getBoundingClientRect();
       native(() => cell.node.dispatchEvent(new MouseEvent('click', { bubbles: true, cancelable: true, composed: true,
         clientX: rect.left + rect.width / 2, clientY: rect.top + rect.height / 2, button: 0 })));
     }

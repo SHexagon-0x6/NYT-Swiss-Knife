@@ -137,7 +137,7 @@
       }));
     }
     const ignored = event => event.defaultPrevented || event.isComposing || event.ctrlKey || event.metaKey || event.altKey ||
-      event.target.closest?.('input,textarea,select,[contenteditable=true],#margin-host,[data-margin-inline],[data-margin-overlay],a,dialog');
+      event.target.closest?.('button,[role=button],input,textarea,select,[contenteditable=true],#margin-host,[data-margin-inline],[data-margin-overlay],a,dialog');
     function key(event) {
       if (ignored(event)) return;
       if (/^[1-9]$/.test(event.key)) { event.preventDefault(); enter(Number(event.key)); }

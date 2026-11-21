@@ -26,7 +26,10 @@ test('daily and archived crosswords select the crossword adapter', () => {
   for (const pathname of ['/crosswords/game/daily', '/crosswords/game/daily/2026/10/01']) connected(pathname, 'crossword');
 });
 test('Mini and archived Mini crosswords select the crossword adapter', () => {
-  for (const pathname of ['/crosswords/game/mini', '/crosswords/game/mini/2026/10/01']) connected(pathname, 'crossword');
+  for (const pathname of ['/crosswords/game/mini', '/crosswords/game/mini/2026/10/01', '/games/crosswords/mini']) connected(pathname, 'crossword');
+});
+test('Midi and archived Midi crosswords select the crossword adapter', () => {
+  for (const pathname of ['/crosswords/game/midi', '/crosswords/game/midi/2026/11/21', '/games/crosswords/midi', '/games/bonus/crossword/midi/2026-11-21']) connected(pathname, 'crossword');
 });
 test('monthly Bonus Crossword URLs already receive the crossword adapter', () => {
   for (const pathname of ['/crosswords/game/bonus/2026/10', '/crosswords/game/bonus/2025/05']) connected(pathname, 'crossword');

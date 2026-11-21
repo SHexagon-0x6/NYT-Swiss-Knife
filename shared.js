@@ -65,7 +65,7 @@
     if (/connections(?:\/|$)/.test(path)) return 'connections';
     if (/wordle(?:\/|$)/.test(path)) return 'wordle';
     if (/sudoku(?:\/|$)/.test(path)) return 'sudoku';
-    if (/crosswords\/(?:game|daily|mini)/.test(path)) return 'crossword';
+    if (/crosswords\/(?:game|daily|midi|mini)/.test(path)) return 'crossword';
     return null;
   }
   function shortcutLabel(value){

@@ -185,6 +185,67 @@
     adapter.destroy();
     check(!document.querySelector('[data-margin-colored],[data-margin-colored-hidden],[data-margin-colored-italic],style[data-margin-overlay]') && !shortcut.fn, 'Destroy removes page styles, marks and the shortcut');
     practice.destroy();
+
+    // Verify NYT's role="switch" aria-checked="true/false" mode buttons (no aria-pressed), SVG path digits, color, italic, and focus handling.
+    practice = window.MarginSudokuBoard.build(fixture);
+    const syncSwitchAttrs = () => {
+      for (const [btn, cls] of [[practice.normal, 'normalMode'], [practice.candidate, 'candidateMode']]) {
+        const active = (btn.getAttribute('aria-pressed') ?? btn.getAttribute('aria-checked')) === 'true';
+        btn.removeAttribute('aria-pressed');
+        btn.setAttribute('role', 'switch');
+        btn.setAttribute('aria-checked', String(active));
+        btn.classList.toggle(cls, active);
+      }
+      // Replace text digits with path shapes like NYT's live SVG candidates.
+      for (const svg of practice.board.querySelectorAll('.su-candidates > svg')) {
+        if (!svg.querySelector('path')) {
+          const title = document.createElementNS('http://www.w3.org/2000/svg', 'title');
+          title.textContent = `Number ${svg.getAttribute('data-candidate')}`;
+          const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+          path.setAttribute('class', 'su-number');
+          path.setAttribute('d', 'M4 4h12v12H4z');
+          svg.replaceChildren(title, path);
+        }
+      }
+    };
+    const origPaint = practice.paint;
+    practice.normal.addEventListener('click', syncSwitchAttrs);
+    practice.candidate.addEventListener('click', syncSwitchAttrs);
+    practice.autoInput.addEventListener('change', syncSwitchAttrs);
+    document.addEventListener('keydown', () => setTimeout(syncSwitchAttrs, 0));
+    syncSwitchAttrs();
+    options.coloredColor = '#2f6fdb';
+    options.coloredItalic = true;
+    ctx.state = {};
+    adapter = MarginGames.sudoku.mount(ctx);
+    practice.select(2); syncSwitchAttrs();
+    check(practice.normal.getAttribute('aria-checked') === 'true' && practice.candidate.getAttribute('aria-pressed') === null, 'Switch-mode fixture uses aria-checked without aria-pressed');
+    coloredBox().click(); syncSwitchAttrs();
+    check(coloredBox().checked && practice.candidate.getAttribute('aria-checked') === 'true', 'Colored candidate switches role="switch" Candidate mode on');
+    check(document.activeElement === practice.cells[2], 'Toggling Colored candidate returns focus to the selected cell for immediate typing');
+    keyOn(practice.cells[2], '4'); await wait(20); syncSwitchAttrs(); adapter.refresh();
+    const switchPath = () => mark(practice, 2, 4)?.querySelector('path');
+    check(colored(practice, 2, 4) && getComputedStyle(switchPath()).fill === 'rgb(47, 111, 219)' && getComputedStyle(switchPath()).transform !== 'none', 'Switch-mode candidate gets default blue fill and italic slant');
+    // Pressing a digit while focus is on a button (ignored by NYT) must not toggle colored state.
+    keyOn(practice.candidate, '4'); await wait(20);
+    check(colored(practice, 2, 4), 'Digit keydown on a focused button does not unpaint a colored candidate');
+    // Custom color + Italic toggle on SVG path candidates.
+    const switchHex = panel.querySelector('.colored-hex'), switchItalic = panel.querySelector('input[aria-label="Italic colored candidates"]');
+    switchHex.value = '#d946ef'; switchHex.dispatchEvent(new Event('change'));
+    switchItalic.click();
+    check(getComputedStyle(switchPath()).fill === 'rgb(217, 70, 239)' && getComputedStyle(switchPath()).transform === 'none', 'Custom color and Italic off apply to SVG path candidates in switch mode');
+    switchItalic.click();
+    check(getComputedStyle(switchPath()).transform !== 'none', 'Italic on restores slant to SVG path candidates in switch mode');
+    // Delete colored candidates works in switch mode.
+    const switchWipe = panel.querySelector('button[aria-label="Delete all colored candidates from the board"]');
+    practice.keyboard.querySelectorAll('.su-keyboard__number').forEach(b => b.addEventListener('click', syncSwitchAttrs));
+    switchWipe.click(); switchWipe.click();
+    for (let i = 0; i < 40 && switchWipe.textContent !== 'Colored candidates'; i++) await wait(50);
+    check(!mark(practice, 2, 4) && !Object.keys(ctx.state.sudokuColored).length, 'Clear all colored candidates deletes marks when mode buttons use aria-checked');
+    practice.normal.click(); syncSwitchAttrs(); adapter.refresh();
+    check(!coloredBox().checked, 'Switching to role="switch" Normal turns Colored candidate off');
+    adapter.destroy();
+    practice.destroy();
     output.textContent = `PASS: ${checks}`;
     document.body.dataset.testResult = 'pass';
   } catch (error) {

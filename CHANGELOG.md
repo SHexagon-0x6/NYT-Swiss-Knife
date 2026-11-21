@@ -1,5 +1,10 @@
 # Changes
 
+## 0.7.10
+
+- Crossword: fix A–Z letter trials and Notes on The Midi, including rectangular, shaped, and colored grids.
+- Sudoku: fix Colored candidate (both color and italic) not working after NYT updated the Normal and Candidate mode switches.
+
 ## 0.7.9
 
 - Stats: fix "Could not load your stats. Close and reopen to retry." after opening Sudoku and choosing Hard, which needed a tab refresh to clear. Finish times from that visit now save too.

@@ -109,6 +109,28 @@
     grid.append(...cells);fixture.replaceChildren(board);mount();key('Control');key('x');key('y');
     assert(marks('0:0').textContent==='XY' && !value(0).textContent && !board.contains(overlay()), 'SVG overlay was read as native content');
   });
+  await run('rectangular Midi ARIA SVG grids support candidate notes and skip external cutouts', () => {
+    setup(); adapter.destroy(); const ns='http://www.w3.org/2000/svg';
+    const svg=(name,attrs)=>{const node=document.createElementNS(ns,name);for(const [k,v]of Object.entries(attrs))node.setAttribute(k,String(v));return node;};
+    const board=svg('svg',{class:'xwd__svg',width:240,height:180}), grid=svg('g',{role:'grid','aria-rowcount':3,'aria-colcount':4}); board.append(grid);
+    cells=[];
+    for(let r=0;r<3;r++){
+      const row=svg('g',{role:'row'});
+      for(let c=0;c<4;c++){
+        const i=r*4+c, external=i===0, cell=svg('g',{class:'xwd__cell',role:external?'presentation':'gridcell','data-testid':'cell-g',...(external?{'aria-hidden':'true'}:{'aria-rowindex':r+1,'aria-colindex':c+1,'aria-selected':String(i===1),tabindex:0})});
+        cell.append(svg('rect',{x:c*60,y:r*60,width:60,height:60,fill:external?'none':'#fff',class:'xwd__cell--cell xwd__cell--nested'}));
+        if(!external){
+          const val=svg('text',{class:'crossword-letter','text-anchor':'middle',x:c*60+30,y:r*60+40});
+          cell.append(val); cell.addEventListener('click',()=>select(i));
+        }
+        cells.push(cell); row.append(cell);
+      }
+      grid.append(row);
+    }
+    fixture.replaceChildren(board); selected=1; mount(); select(1);
+    key('Control'); key('m'); key('p');
+    assert(marks('0:1')?.textContent==='MP' && !marks('0:0'), 'Midi rectangular candidate notes failed or marked an external cutout');
+  });
   await run('destroy removes notes and restores the original board container styles', () => {
     setup(); key('Control'); key('a'); assert(fixture.style.isolation==='isolate', 'fixture lacks local stacking context');
     adapter.destroy(); adapter=null;

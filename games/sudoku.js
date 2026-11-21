@@ -128,7 +128,14 @@
     }
 
     const modeButton = name => Array.from(document.querySelectorAll(`[data-testid="${name}-mode"]`)).find(node => visible(node) && !node.closest(OWN));
-    const candidateMode = () => modeButton('candidate')?.getAttribute('aria-pressed') === 'true';
+    const modeActive = name => {
+      const button = modeButton(name);
+      if (!button) return false;
+      const state = button.getAttribute('aria-checked') ?? button.getAttribute('aria-pressed');
+      if (state !== null) return state === 'true';
+      return new RegExp(`(?:^|\\s)${name}Mode(?:\\s|$)`).test(button.className || '');
+    };
+    const candidateMode = () => modeActive('candidate');
     const dialogOpen = () => Array.from(document.querySelectorAll(`${MODAL},.su-modal-pause,.xwd__modal--content`)).some(node => visible(node) && !node.closest(OWN));
     const selectedIndex = () => board.findIndex(cell => /(?:^|\s)selected(?:\s|$)/.test(cell.className || '') || cell.getAttribute('aria-selected') === 'true');
     // Turning colors on needs Candidate mode. Turning them off never changes the
@@ -138,7 +145,7 @@
       if (on === coloredOn) { paintRow(); return; }
       coloredOn = on;
       const candidate = modeButton('candidate');
-      if (on && candidate && candidate.getAttribute('aria-pressed') !== 'true') candidate.click();
+      if (on && candidate && !modeActive('candidate')) candidate.click();
       paintRow();
     }
 
@@ -188,7 +195,7 @@
     }
     function keys(event) {
       if (destroyed || ownEvent(event) || event.metaKey || event.ctrlKey || event.altKey || event.isComposing || event.repeat) return;
-      if (event.target?.closest?.(`input:not([type="checkbox"]):not([type="radio"]),textarea,select,[contenteditable="true"],${MODAL}`)) return;
+      if (event.target?.closest?.(`button,a,[role="button"],input:not([type="checkbox"]):not([type="radio"]),textarea,select,[contenteditable="true"],${MODAL}`)) return;
       if (event.key === 'Backspace' || event.key === 'Delete') { board = cells(); const index = selectedIndex(); later(() => reconcile(index), 450); return; }
       const digit = /^[1-9]$/.test(event.key) ? Number(event.key) : null;
       const decision = decide(digit);
@@ -198,9 +205,10 @@
     }
 
     // The Colored candidate row sits right below NYT's Auto candidate checkbox.
-    const coloredInput = el('input', { type: 'checkbox', 'aria-label': 'Colored candidate', onChange: event => setColoredMode(event.target.checked) });
+    const focusCell = () => { board = cells(); const index = selectedIndex(); if (index >= 0) board[index]?.focus?.({ preventScroll: true }); };
+    const coloredInput = el('input', { type: 'checkbox', 'aria-label': 'Colored candidate', onChange: event => { setColoredMode(event.target.checked); focusCell(); } });
     const swatch = el('span', { className: 'colored-swatch', 'aria-hidden': 'true' });
-    const eye = el('button', { type: 'button', className: 'colored-eye', onClick: () => { ctx.state.sudokuColoredHidden = !ctx.state.sudokuColoredHidden; ctx.save(); paint(); paintRow(); } });
+    const eye = el('button', { type: 'button', className: 'colored-eye', onClick: () => { ctx.state.sudokuColoredHidden = !ctx.state.sudokuColoredHidden; ctx.save(); paint(); paintRow(); focusCell(); } });
     const hint = el('span', { className: 'colored-hint' });
     const row = el('div', { className: 'colored-row' }, el('label', { className: 'colored-toggle' }, coloredInput, el('span', { textContent: 'Colored candidate' }), swatch), hint, eye);
     const rowStyle = el('style', { textContent: `
@@ -346,7 +354,7 @@
       board = cells();
       if (!enabled() && coloredOn) setColoredMode(false);
       // The game's own Normal button or shortcut ends blue entry.
-      if (coloredOn && board.length && modeButton('normal')?.getAttribute('aria-pressed') === 'true') setColoredMode(false);
+      if (coloredOn && board.length && modeActive('normal')) setColoredMode(false);
       observeBoard(); paint(); placeRow(); paintRow(); paintSettings();
     }
     const unbindShortcut = ctx.bindShortcut?.(() => {

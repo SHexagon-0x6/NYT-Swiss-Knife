@@ -73,7 +73,7 @@ async function gameReady(url){await send('Page.navigate',{url});await wait(1000)
  const marks=`[...document.querySelectorAll('.su-candidates > svg.su-candidate')].filter(${within})`;
  const mark=digit=>evaluate(`(()=>{const m=${marks}.find(n=>n.getAttribute('data-candidate')==='${digit}');return m?{colored:m.hasAttribute('data-margin-colored'),fill:getComputedStyle(m.querySelector('path,text')).fill}:null})()`);
  const coloredChecked=()=>inside('[data-margin-inline="sudoku-colored"]',`function(){return this.querySelector('input').checked}`);
- const pressed=name=>evaluate(`document.querySelector('[data-testid="${name}-mode"]').getAttribute('aria-pressed')==='true'`);
+ const pressed=name=>evaluate(`(()=>{const n=document.querySelector('[data-testid="${name}-mode"]');return(n?.getAttribute('aria-checked')??n?.getAttribute('aria-pressed'))==='true'})()`);
  await nativeClick('[data-live-empty]');await wait(300);
  await key('b','KeyB');await wait(250);
  assert(await coloredChecked()&&await pressed('candidate'),'The B hotkey turns on Colored candidate in native Candidate mode');
@@ -85,7 +85,7 @@ async function gameReady(url){await send('Page.navigate',{url});await wait(1000)
  await key('8','Digit8');await wait(450);assert((await mark(8))?.colored,'A third press paints it blue again');
  await key('b','KeyB');await wait(250);
  assert(!await coloredChecked()&&await pressed('candidate'),'B again turns colors off and keeps native Candidate');
- await nativeClick('[data-testid="candidate-mode"]');await key('8','Digit8');await wait(450);
+ await nativeClick('[data-testid="candidate-mode"]');await evaluate(`document.querySelector('[data-live-empty]')?.focus({preventScroll:true})`);await key('8','Digit8');await wait(450);
  let data=(await send('Extensions.getStorageItems',{id:loaded.id,storageArea:'local'},session)).data;
  assert(!(await mark(8))&&!Object.values(data).find(n=>n?.game==='sudoku')?.state.sudokuColored?.[cellIndex]?.includes(8),'Removing a colored candidate the normal way also forgets its color');
  await nativeClick('label.su-keyboard__auto');await wait(600);
