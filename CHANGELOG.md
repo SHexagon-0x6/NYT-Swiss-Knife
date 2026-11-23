@@ -1,5 +1,10 @@
 # Changes
 
+## 0.8.1
+
+- Stats: fix Hard Sudoku finish times and the "Record this time" control not appearing on NYT's updated congratulations screen.
+- Popup: fix Sudoku not showing Done after finishing a puzzle, on the puzzle chooser screen, or when reopening a solved board.
+
 ## 0.8.0
 
 - Crossword: fix A–Z letter trials and Notes on The Midi, including rectangular, shaped, and colored grids.

@@ -5,15 +5,19 @@
   const cssURL = chrome.runtime.getURL('ui.css');
   const disconnected = error => !chrome.runtime?.id || /extension context invalidated/i.test(error?.message || '');
   const visible = node => node && !node.closest('[hidden],[aria-hidden="true"]') && node.getClientRects().length > 0 && getComputedStyle(node).visibility !== 'hidden';
+  const CONGRATS = '[data-testid="sudoku-congrats"],[class*="CongratsMoment-module_content"],.xwd__modal--content';
+  const MESSAGE = '[data-testid="subheading"],[class*="CongratsMoment-module_subheading"],.xwd__congrats-modal--message,.modal-system-subheader,.modal-system-description,.xwd__center';
   let timer, pending = false, retryAfter = 0, prompt = null;
   function inspect() {
     const path = location.pathname;
     const game = /^\/(?:games|puzzles)\/sudoku\/hard\/?$/.test(path) ? 'sudoku-hard' : null;
     const date = game && puzzleDate(game);
     if (!date) return null;
-    for (const modal of document.querySelectorAll('.xwd__modal--content')) {
+    for (const modal of document.querySelectorAll(CONGRATS)) {
       if (!visible(modal)) continue;
-      const text = modal.innerText.replace(/\s+/g,' ');
+      const subheading = [...modal.querySelectorAll(MESSAGE)].find(n => /You finished a hard\s+puzzle\b/i.test(n.textContent.replace(/\s+/g,' ')));
+      const source = subheading || modal;
+      const text = (source.innerText || source.textContent || '').replace(/\s+/g,' ');
       const match = text.match(/You finished a hard\s+puzzle\b[\s\S]*?\bin\s+(.+?)(?:\.|$)/i);
       const seconds = match && S.parseTime(match[1]);
       if (seconds) return {game,date,seconds,modal};
@@ -24,6 +28,16 @@
     const host = el('div',{'data-margin-inline':'stats-prompt'}), root = host.attachShadow({mode:'closed'});
     const nativeButton = record.modal.querySelector('button');
     host.style.setProperty('--stats-font',nativeButton ? getComputedStyle(nativeButton).fontFamily : 'Arial, Helvetica, sans-serif');
+    for (let parent = record.modal; parent && parent.nodeType === 1; parent = parent.parentElement) {
+      const bg = getComputedStyle(parent).backgroundColor;
+      if (bg && bg !== 'transparent' && !/rgba\([^)]*,\s*0\s*\)/.test(bg)) {
+        const rgb = bg.match(/[\d.]+/g)?.slice(0,3).map(Number);
+        if (rgb && rgb.reduce((sum,v) => sum + v,0) < 300) {
+          for (const [k,v] of [['--stats-ink','#f8f8f8'],['--stats-detail','#ccc'],['--stats-muted','#aaa'],['--stats-line','#494a4b']]) host.style.setProperty(k,v);
+        }
+        break;
+      }
+    }
     root.append(el('link',{rel:'stylesheet',href:cssURL}));
     const checkbox = el('input',{type:'checkbox',checked:!!outcome.accepted,'aria-label':'Record this time'});
     const label = el('label',{className:'stats-offer-toggle'},checkbox,el('span',{textContent:'Record this time'}));
@@ -56,7 +70,7 @@
     });
     root.append(el('section',{className:'stats-offer','aria-label':'Record your puzzle time'},label,detail,status,refresh));
     for (const event of ['click','keydown','keyup','pointerdown','pointerup']) root.addEventListener(event,e => e.stopPropagation());
-    const message = [...record.modal.querySelectorAll('.xwd__congrats-modal--message,.modal-system-subheader,.modal-system-description,.xwd__center')].find(n => /You (?:finished|solved)/.test(n.textContent));
+    const message = [...record.modal.querySelectorAll(MESSAGE)].find(n => /You (?:finished|solved)/.test(n.textContent));
     if (message) message.after(host); else record.modal.append(host);
     prompt = {host,key:record.game+':'+record.date+':'+record.seconds};
   }

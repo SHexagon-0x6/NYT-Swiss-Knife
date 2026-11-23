@@ -136,7 +136,7 @@
       return new RegExp(`(?:^|\\s)${name}Mode(?:\\s|$)`).test(button.className || '');
     };
     const candidateMode = () => modeActive('candidate');
-    const dialogOpen = () => Array.from(document.querySelectorAll(`${MODAL},.su-modal-pause,.xwd__modal--content`)).some(node => visible(node) && !node.closest(OWN));
+    const dialogOpen = () => Array.from(document.querySelectorAll(`${MODAL},.su-modal-pause,.xwd__modal--content,[data-testid="sudoku-congrats"],[class*="CongratsMoment-module_content"]`)).some(node => visible(node) && !node.closest(OWN));
     const selectedIndex = () => board.findIndex(cell => /(?:^|\s)selected(?:\s|$)/.test(cell.className || '') || cell.getAttribute('aria-selected') === 'true');
     // Turning colors on needs Candidate mode. Turning them off never changes the
     // game's mode: whatever you chose stays.

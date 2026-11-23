@@ -45,7 +45,7 @@
     const valid = value => globalThis.MarginStats.validDate(value);
     const path = location.pathname.match(/\/(20\d{2})\/(\d{2})\/(\d{2})(?:\/|$)/);
     const archive = path && valid(path.slice(1).join('-')) ? path.slice(1).join('-') : null;
-    const selectors = game === 'crossword-daily' ? '.xwd__details--date' : '.pz-game-date,.pz-game-header__date,.pz-game-title-bar__date,[data-testid="game-date"]';
+    const selectors = game === 'crossword-daily' ? '.xwd__details--date' : '.pz-game-date,.pz-game-header__date,.pz-game-title-bar__date,[data-testid="game-date"],[class*="momentInfoDate"]';
     for (const node of document.querySelectorAll(selectors)) {
       if (node.closest('[hidden],[aria-hidden="true"]') || !node.getClientRects().length || getComputedStyle(node).visibility === 'hidden') continue;
       const text = node.textContent.trim(), iso = text.match(/20\d{2}-\d{2}-\d{2}/)?.[0];

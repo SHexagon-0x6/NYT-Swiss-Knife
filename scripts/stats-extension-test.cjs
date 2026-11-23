@@ -10,7 +10,8 @@ const {tmpdir} = require('node:os');
 const root = resolve(__dirname,'..'), profile = mkdtempSync(join(tmpdir(),'swiss-stats-'));
 const extensionPath = resolve(process.argv[2] || root);
 const screenshots = process.env.STATS_SCREENSHOTS !== '0';
-const chrome = spawn('google-chrome',['--headless','--no-sandbox','--disable-gpu','--disable-dev-shm-usage','--no-first-run','--no-default-browser-check','--remote-debugging-pipe','--enable-unsafe-extension-debugging','--user-data-dir='+profile],{stdio:['ignore','ignore','ignore','pipe','pipe']});
+const chromeBin = process.env.CHROME || 'google-chrome';
+const chrome = spawn(chromeBin,['--headless','--no-sandbox','--disable-gpu','--disable-dev-shm-usage','--no-first-run','--no-default-browser-check','--remote-debugging-pipe','--enable-unsafe-extension-debugging','--user-data-dir='+profile],{stdio:['ignore','ignore','ignore','pipe','pipe']});
 let seq = 0, buffer = ''; const pending = new Map(), events = new Map();
 function send(method,params={},sessionId) {return new Promise((resolve,reject) => {const id = ++seq;pending.set(id,{resolve,reject});chrome.stdio[3].write(JSON.stringify({id,method,params,...(sessionId?{sessionId}:{})})+'\0');}); }
 chrome.stdio[4].on('data',chunk => {
@@ -35,7 +36,9 @@ async function inside(session,expression,selector = '[data-margin-inline="stats-
   if (result.exceptionDetails) throw Error(result.exceptionDetails.text);
   return result.result.value;
 }
-const fixture = path => `<!doctype html><html><head><meta charset="utf-8"><title>Local result fixture</title><style>body{font:16px Arial;margin:30px}.xwd__modal--content{padding:20px;max-width:500px;border:1px solid #ccc}</style></head><body><main><h1>${path.includes('sudoku')?'Sudoku':'The Crossword'}</h1><div class="${path.includes('sudoku')?'pz-game-date':'xwd__details--date'}">October 30, 2026</div><div class="su-timer__value timer-count">12:34</div><button>Settings</button><div id="result" class="xwd__modal--content ${path.includes('sudoku')?'':'xwd__congrats-modal'}" hidden><h2>Congratulations!</h2><p class="modal-system-subheader xwd__congrats-modal--message">${path.includes('sudoku')?'You finished a <em>hard</em><br> puzzle in <em>12:34</em>.':'You solved the crossword<br>in <strong>25:06</strong>.'}</p></div></main></body></html>`;
+const sudokuResult = `<div id="result" class="pz-moment CongratsMoment-module_wrapper__MySh2" data-testid="moment-wrapper" hidden><button type="button" class="pz-moment__close_text CongratsMoment-module_closeButton__XDU36"><span class="inner-text">Back to puzzle</span></button><div class="CongratsMoment-module_content__RtSKb" data-testid="sudoku-congrats"><h1 class="CongratsMoment-module_heading__BM0pT" data-testid="header">Congratulations!</h1><p class="CongratsMoment-module_subheading__v9ifd" data-testid="subheading"><span>You finished a <em>hard</em><br> puzzle in <em>12:34</em>.</span></p><div class="CongratsMoment-module_actions__fqhU7" data-testid="actions"><div class="modal-congrats-buttons"><button class="pz-modal__button primary large" type="button" data-testid="btn-view-all-games">View all games</button></div><a href="/games/bonus/hub">Play Wordle in 1 and more fun twists on games you know.</a><a href="/crosswords/game/mini">Solve in seconds</a></div></div></div>`;
+const crosswordResult = `<div id="result" class="xwd__modal--content xwd__congrats-modal" hidden><h2>Congratulations!</h2><p class="modal-system-subheader xwd__congrats-modal--message">You solved the crossword<br>in <strong>25:06</strong>.</p></div>`;
+const fixture = path => `<!doctype html><html><head><meta charset="utf-8"><title>Local result fixture</title><style>body{font:16px Arial;margin:30px}.xwd__modal--content,[data-testid="sudoku-congrats"]{padding:20px;max-width:500px;border:1px solid #ccc}</style></head><body><main><h1>${path.includes('sudoku')?'Sudoku':'The Crossword'}</h1><div class="${path.includes('sudoku')?'pz-game-date':'xwd__details--date'}">October 30, 2026</div><div class="su-timer__value timer-count">12:34</div><button>Settings</button>${path.includes('sudoku')?sudokuResult:crosswordResult}</main></body></html>`;
 const report = message => console.log('PASS '+message);
 const deadline = setTimeout(() => {console.error('Stats extension checks timed out');chrome.kill();process.exitCode=1;},90000);
 (async () => {
@@ -89,6 +92,8 @@ const deadline = setTimeout(() => {console.error('Stats extension checks timed o
   await evaluate(game,`document.getElementById('result').hidden=false`);
   await until(() => inside(game,'return !!this.querySelector("input[type=checkbox]")?.checked'),'Sudoku default recording');
   await until(async () => (await local())['sudoku-hard:2026-10-30'] === 754,'automatic Sudoku save');
+  assert(await evaluate(game,`(()=>{const p=document.querySelector('[data-margin-inline="stats-prompt"]');return p?.previousElementSibling?.getAttribute('data-testid')==='subheading' && p?.nextElementSibling?.getAttribute('data-testid')==='actions'})()`));
+  await until(() => evaluate(stats,`chrome.storage.local.get('daily:sudoku').then(d=>d['daily:sudoku']==='2026-10-30')`),'Sudoku Done date saved from CongratsMoment');
   await until(() => evaluate(stats,`document.querySelector('.day[data-date="2026-10-30"]')?.classList.contains('yellow')`),'first result is normal');
   assert.match(await inside(game,'return this.textContent'),/12:34/);
   assert(await inside(game,'const s=getComputedStyle(this.querySelector(".stats-offer"));return s.backgroundColor==="rgba(0, 0, 0, 0)" && s.borderRadius==="0px"'));
@@ -114,8 +119,8 @@ const deadline = setTimeout(() => {console.error('Stats extension checks timed o
       await until(() => evaluate(game,`!document.querySelector('[data-margin-inline="stats-prompt"]')`),'old completion closes');
     }
     const label = `${Math.floor(seconds/60)}:${String(seconds%60).padStart(2,'0')}`;
-    const message = `You finished a hard puzzle in ${label}.`;
-    await evaluate(game,`document.querySelector('.modal-system-subheader').textContent=${JSON.stringify(message)};document.getElementById('result').hidden=false`);
+    const message = `You finished a hard puzzle with 2 errors in ${label}.`;
+    await evaluate(game,`document.querySelector('[data-testid="subheading"],.modal-system-subheader').textContent=${JSON.stringify(message)};document.getElementById('result').hidden=false`);
     await until(async () => (await local())[gameName+':'+date] === seconds,'repeat completion replaces time');
     await until(async () => await inside(game,`return !!this.querySelector('input')?.checked && this.querySelector('.stats-offer-detail').textContent.includes(${JSON.stringify(label)})`),'repeat control displays new time');
     assert.equal(await evaluate(stats,`chrome.storage.sync.get(null).then(d=>MarginStats.unpack(d).records[${JSON.stringify(gameName+':'+date)}])`),seconds);
@@ -130,7 +135,7 @@ const deadline = setTimeout(() => {console.error('Stats extension checks timed o
   await until(async () => (await local())['sudoku-hard:2026-10-30'] === 600,'declined repeat restores previous time');
   await until(() => inside(game,`return !this.querySelector('input').checked && this.querySelector('.stats-offer-status').textContent.includes('10:00')`),'previous time explained');
   await navigate('/puzzles/sudoku/hard');
-  await evaluate(game,`document.querySelector('.modal-system-subheader').textContent='You finished a hard puzzle in 15:00.';document.getElementById('result').hidden=false`);
+  await evaluate(game,`document.querySelector('[data-testid="subheading"],.modal-system-subheader').textContent='You finished a hard puzzle in 15:00.';document.getElementById('result').hidden=false`);
   await until(() => inside(game,`return this.querySelector('.stats-offer-status')?.textContent.includes('10:00')`),'declined repeat survives reload');
   assert.equal(await inside(game,`return this.querySelector('input').checked`),false);
   await inside(game,'this.querySelector("input").click()');
@@ -140,7 +145,7 @@ const deadline = setTimeout(() => {console.error('Stats extension checks timed o
   report('Declining a repeat restores the previous time, including after reload and repeated checkbox changes');
   await evaluate(stats,`chrome.runtime.sendMessage({type:'swiss-stats',action:'save-day',game:'sudoku-hard',date:'2026-10-30',seconds:950})`);
   await navigate('/puzzles/sudoku/hard');
-  await evaluate(game,`document.querySelector('.modal-system-subheader').textContent='You finished a hard puzzle in 15:00.';document.getElementById('result').hidden=false`);
+  await evaluate(game,`document.querySelector('[data-testid="subheading"],.modal-system-subheader').textContent='You finished a hard puzzle in 15:00.';document.getElementById('result').hidden=false`);
   await until(async () => await inside(game,`return this.querySelector('.stats-offer-status')?.textContent.includes('15:50')`),'reopened result keeps manual correction');
   assert.equal((await local())['sudoku-hard:2026-10-30'],950);
   report('Reopening a previously captured result after refresh preserves manual calendar corrections');
@@ -249,6 +254,28 @@ const deadline = setTimeout(() => {console.error('Stats extension checks timed o
   await evaluate(game,`document.getElementById('result').hidden=false`);
   await until(async () => (await local())['sudoku-hard:2026-10-29'] === 754,'time saved after route change');
   report('Reaching Hard without a page load opens the calendar and saves the time');
+  // Verify popup Done status from Sudoku welcome screen and reopened solved Sudoku board.
+  const currentSudokuDate = await evaluate(stats,`Margin.latestPuzzleDate('sudoku')`);
+  const printedCurrentDate = new Date(currentSudokuDate+'T12:00:00Z').toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric',timeZone:'UTC'});
+  await evaluate(stats,`chrome.storage.local.remove('daily:sudoku')`);
+  await until(() => evaluate(stats,`document.querySelector('[data-game="sudoku"] .game-status')?.classList.contains('new')`),'Sudoku starts New before welcome check');
+  await navigate('/puzzles/sudoku');
+  await evaluate(game,`document.querySelector('.pz-game-date').textContent=${JSON.stringify(printedCurrentDate)};document.body.insertAdjacentHTML('beforeend','<div class="playbook-welcome-moment"><div role="group" aria-label="Choose Your Puzzle" class="DifficultyGroup-module_difficultyGroup__nZFSi"><button type="button">Easy</button><button type="button">Medium</button><button type="button">Hard</button></div><span class="_momentInfoDate_1sc8y_1">'+${JSON.stringify(printedCurrentDate)}+'</span></div>')`);
+  await wait(600);
+  assert.equal(await evaluate(stats,`chrome.storage.local.get('daily:sudoku').then(d=>d['daily:sudoku']||null)`),null,'Unfinished Sudoku welcome buttons do not mark Done');
+  await evaluate(game,`(()=>{const b=[...document.querySelectorAll('.playbook-welcome-moment button')][2];b.innerHTML='<div class="_iconChecked_1"></div>Hard<span class="visually-hidden">, completed</span>'})()`);
+  await until(() => evaluate(stats,`document.querySelector('[data-game="sudoku"] .game-status')?.classList.contains('done')`),'Popup marks Sudoku Done from welcome screen completed difficulty');
+  await evaluate(stats,`chrome.storage.local.remove('daily:sudoku')`);
+  await until(() => evaluate(stats,`document.querySelector('[data-game="sudoku"] .game-status')?.classList.contains('new')`),'Sudoku reset before solved board check');
+  await navigate('/puzzles/sudoku/hard');
+  const beforeBoardRecords = await local();
+  await evaluate(game,`(()=>{document.querySelector('.pz-game-date').textContent=${JSON.stringify(printedCurrentDate)};const board=document.createElement('div');board.className='su-board';for(let r=0;r<9;r++)for(let c=0;c<9;c++){const v=(r*3+Math.floor(r/3)+c)%9+1;const cell=document.createElement('div');cell.className='su-cell';cell.style.cssText='width:30px;height:30px;display:inline-block';const svg=document.createElementNS('http://www.w3.org/2000/svg','svg');svg.setAttribute('class','su-cell__value');svg.setAttribute('data-number',String(r===8&&c===8?((v%9)+1):v));cell.append(svg);board.append(cell);}document.querySelector('main').append(board);})()`);
+  await wait(600);
+  assert.equal(await evaluate(stats,`chrome.storage.local.get('daily:sudoku').then(d=>d['daily:sudoku']||null)`),null,'Mistaken 81-cell board does not mark Sudoku Done');
+  await evaluate(game,`(()=>{const last=document.querySelectorAll('.su-board .su-cell .su-cell__value')[80];const v=(8*3+Math.floor(8/3)+8)%9+1;last.setAttribute('data-number',String(v));})()`);
+  await until(() => evaluate(stats,`document.querySelector('[data-game="sudoku"] .game-status')?.classList.contains('done')`),'Popup marks Sudoku Done from reopened valid solved board');
+  assert.deepEqual(await local(),beforeBoardRecords,'Reopened solved board never infers or alters recorded times');
+  report('Popup marks Sudoku Done from CongratsMoment, completed welcome button, and reopened solved board');
   await navigate('/puzzles/sudoku/hard');
   await evaluate(stats,'chrome.runtime.reload()').catch(() => {});
   await inside(game,'this.querySelector("button").click()',logoSelector);

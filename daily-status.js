@@ -38,6 +38,29 @@
     return puzzleDate(id === 'crossword' ? 'crossword-daily' : id) || openedDate(id);
   }
   const outsideDialogs = node => !node.closest('dialog,[role="dialog"],[aria-modal="true"],[class*="Modal-module"],[class*="HelpModal"]');
+  function sudokuBoardSolved() {
+    const cells = [...document.querySelectorAll('.su-board .su-cell')].filter(visible);
+    if (cells.length !== 81) return false;
+    const grid = Array(81).fill(0);
+    cells.forEach((cell, idx) => {
+      if (/(?:^|\s)(?:conflicted|rejected)(?:\s|$)/.test(cell.className || '')) return;
+      const raw = cell.getAttribute('data-cell'), pos = raw !== null && /^\d+$/.test(raw) ? Number(raw) : idx;
+      const value = cell.querySelector('.su-cell__value');
+      const digit = Number(value?.getAttribute('data-number') || value?.textContent?.match(/[1-9]/)?.[0] || 0);
+      if (pos >= 0 && pos < 81 && digit >= 1 && digit <= 9) grid[pos] = digit;
+    });
+    if (grid.includes(0)) return false;
+    for (let i = 0; i < 9; i++) {
+      const row = new Set(), col = new Set(), box = new Set();
+      for (let j = 0; j < 9; j++) {
+        row.add(grid[i * 9 + j]);
+        col.add(grid[j * 9 + i]);
+        box.add(grid[(Math.floor(i / 3) * 3 + Math.floor(j / 3)) * 9 + (i % 3) * 3 + (j % 3)]);
+      }
+      if (row.size !== 9 || col.size !== 9 || box.size !== 9) return false;
+    }
+    return true;
+  }
   function finishedDate(id) {
     for (const node of document.querySelectorAll('.pz-moment__welcome,[class*="Welcome-module_contentWelcome"]')) {
       if (visible(node) && FINISHED_WELCOME.test(node.textContent)) return printedDate(node.textContent) || pageDate(id);
@@ -56,9 +79,16 @@
       if (rows.some(row => row.length === 5 && row.every(state => state === 'correct')) || rows.length === 6 && rows.every(evaluated)) return pageDate(id);
     }
     if (id === 'sudoku') {
-      for (const modal of document.querySelectorAll('.xwd__modal--content')) {
+      for (const modal of document.querySelectorAll('[data-testid="sudoku-congrats"],[class*="CongratsMoment-module_content"],.xwd__modal--content')) {
         if (visible(modal) && /You finished an?\s+(?:easy|medium|hard)\s+puzzle\b/i.test(modal.textContent.replace(/\s+/g, ' '))) return pageDate(id);
       }
+      for (const welcome of document.querySelectorAll('.playbook-welcome-moment,[class*="welcomeMomentContainer"]')) {
+        if (!visible(welcome)) continue;
+        const solved = [...welcome.querySelectorAll('[role="group"][aria-label="Choose Your Puzzle"] button,[class*="DifficultyGroup-module"] button')]
+          .some(btn => visible(btn) && (/\b(?:easy|medium|hard)\s*,\s*completed\b/i.test(btn.textContent.replace(/\s+/g, ' ')) || !!btn.querySelector('[class*="iconChecked"]')));
+        if (solved) return printedDate(welcome.querySelector('[class*="momentInfoDate"]')?.textContent || welcome.innerText || welcome.textContent) || pageDate(id);
+      }
+      if (sudokuBoardSolved()) return pageDate(id);
     }
     if (id === 'crossword') {
       for (const modal of document.querySelectorAll('.xwd__congrats-modal')) {
@@ -87,7 +117,7 @@
   }
   const schedule = () => { if (!timer) timer = setTimeout(check, 400); };
   const observer = new MutationObserver(schedule);
-  observer.observe(document.documentElement, {subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['class', 'data-state', 'hidden', 'aria-hidden']});
+  observer.observe(document.documentElement, {subtree: true, childList: true, characterData: true, attributes: true, attributeFilter: ['class', 'data-state', 'data-number', 'hidden', 'aria-hidden']});
   const interval = setInterval(schedule, 2000);
   window.addEventListener('pagehide', event => {
     if (!event.persisted) { clearTimeout(timer); clearInterval(interval); observer.disconnect(); }

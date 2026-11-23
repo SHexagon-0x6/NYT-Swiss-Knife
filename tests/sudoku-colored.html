@@ -244,6 +244,10 @@
     check(!mark(practice, 2, 4) && !Object.keys(ctx.state.sudokuColored).length, 'Clear all colored candidates deletes marks when mode buttons use aria-checked');
     practice.normal.click(); syncSwitchAttrs(); adapter.refresh();
     check(!coloredBox().checked, 'Switching to role="switch" Normal turns Colored candidate off');
+    const congrats = el('div', {className: 'CongratsMoment-module_content__RtSKb', 'data-testid': 'sudoku-congrats', textContent: 'Congratulations!'});
+    document.body.append(congrats);
+    check(shortcut.fn() === false && !coloredBox().checked, 'Colored candidate shortcut is ignored while Sudoku CongratsMoment is open');
+    congrats.remove();
     adapter.destroy();
     practice.destroy();
     output.textContent = `PASS: ${checks}`;
